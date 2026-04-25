@@ -34,15 +34,26 @@ Reglas Estrictas:
 Además, ahora debes analizar el sentimiento del usuario. Clasifícalo según su tono (ej. Frustración, Duda, Enojo, Interés).
 Si el usuario está muy molesto, hace preguntas fuera de tu alcance, o pide explícitamente hablar con un humano, debes levantar la bandera 'requires_human' a true."""
 
+from api.services.calendar_client import check_free_slots, book_appointment
+
     try:
+        # Añadimos las herramientas al LLM
+        tools = [check_free_slots, book_appointment]
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_rules,
+            response_mime_type="application/json",
+            response_schema=OrusResponse,
+            tools=tools
+        )
+        
+        # Para que el LLM pueda invocar funciones e interactuar, idealmente se usa un objeto Chat.
+        # Por simplicidad en la respuesta simple, se lo pasamos a generate_content.
+        # Nota: Si el LLM decide usar la herramienta, el flujo debería manejar function_calls.
         response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_rules,
-                response_mime_type="application/json",
-                response_schema=OrusResponse
-            )
+            config=config
         )
         # response.text is a JSON string because of the response_schema
         parsed_json = json.loads(response.text)

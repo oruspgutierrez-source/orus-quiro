@@ -17,10 +17,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = str(exc)
+    stack = traceback.format_exc()
+    try:
+        from api.db.supabase_client import supabase
+        supabase.table('orus_logs').insert({
+            'error_message': error_msg,
+            'stack_trace': stack,
+            'severity': 'ERROR'
+        }).execute()
+    except Exception as db_exc:
+        print(f"Error guardando log: {db_exc}")
+        
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal server error occurred."}
+    )
+
 app.include_router(webhooks.router)
 app.include_router(health.router)
 app.include_router(llm_test.router)
 app.include_router(dashboard.router)
+app.include_router(dashboard.metrics_router)
 
 @app.get("/")
 def root():

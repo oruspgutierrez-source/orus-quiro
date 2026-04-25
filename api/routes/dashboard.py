@@ -62,3 +62,47 @@ async def send_manual_message(user_id: str, payload: ManualMessage):
         return {"status": "success", "message": "Mensaje enviado correctamente."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+metrics_router = APIRouter(prefix="/api/metrics", tags=["Metrics"])
+
+@metrics_router.get("/bot_vs_human")
+def get_bot_vs_human_metrics():
+    try:
+        response = supabase.table('orus_users').select('session_mode').execute()
+        users = response.data
+        total = len(users)
+        if total == 0:
+            return {"total_users": 0, "ai_managed": 0, "human_managed": 0, "human_intervention_rate": "0.0%"}
+        
+        ai_count = sum(1 for u in users if u.get('session_mode') == 'AI')
+        human_count = total - ai_count
+        
+        return {
+            "total_users": total,
+            "ai_managed": ai_count,
+            "human_managed": human_count,
+            "human_intervention_rate": f"{(human_count / total) * 100:.1f}%"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@metrics_router.get("/conversion")
+def get_conversion_metrics():
+    try:
+        response = supabase.table('orus_users').select('payment_status, total_spent').execute()
+        users = response.data
+        total = len(users)
+        if total == 0:
+            return {"total_users": 0, "paid_users": 0, "total_revenue": 0.0, "conversion_rate": "0.0%"}
+        
+        paid_count = sum(1 for u in users if u.get('payment_status') == 'pagado')
+        total_revenue = sum(float(u.get('total_spent', 0)) for u in users)
+        
+        return {
+            "total_users": total,
+            "paid_users": paid_count,
+            "total_revenue": total_revenue,
+            "conversion_rate": f"{(paid_count / total) * 100:.1f}%"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
