@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 # Cargar variables de entorno antes de importar modulos que dependan de ellas
 load_dotenv()
 
-from api.routes import webhooks, health, llm_test, dashboard
+from api.routes import webhooks, health, llm_test, dashboard, metrics
 
-app = FastAPI(title="Orus Quiro API", description="API para el Agente de Quiromancia Védica")
+app = FastAPI(
+    title="Orus Quiro API",
+    description="API para el Agente de Quiromancia Védica"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,6 +19,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# (Middleware de Meta removido a favor de API No Oficial)
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -44,7 +49,7 @@ app.include_router(webhooks.router)
 app.include_router(health.router)
 app.include_router(llm_test.router)
 app.include_router(dashboard.router)
-app.include_router(dashboard.metrics_router)
+app.include_router(metrics.router)
 
 @app.get("/")
 def root():

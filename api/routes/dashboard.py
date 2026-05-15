@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from api.db.supabase_client import supabase
-from api.services.meta_client import send_humanized_response
+from api.services.wa_client import wa_client
+from api.services.security import clear_rate_limit, log_security_event
 
 router = APIRouter(prefix="/api/users", tags=["Dashboard"])
 
@@ -42,7 +43,7 @@ def resolve_human_session(user_id: str):
 async def send_manual_message(user_id: str, payload: ManualMessage):
     """El humano escribe un mensaje, se guarda en la DB y se envía al cliente."""
     try:
-        # Recuperar el teléfono del usuario para enviarlo por Meta
+        # Recuperar el teléfono del usuario para enviarlo por WA
         user_res = supabase.table('orus_users').select('phone_number').eq('id', user_id).execute()
         if not user_res.data:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -56,53 +57,43 @@ async def send_manual_message(user_id: str, payload: ManualMessage):
             'requires_human': False
         }).execute()
         
-        # Enviar vía Meta Client
-        await send_humanized_response(phone_number, payload.message)
+        # Enviar vía Evolution API
+        await wa_client.send_message(phone_number, payload.message)
         
         return {"status": "success", "message": "Mensaje enviado correctamente."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-metrics_router = APIRouter(prefix="/api/metrics", tags=["Metrics"])
-
-@metrics_router.get("/bot_vs_human")
-def get_bot_vs_human_metrics():
+@router.post("/{user_id}/unblock")
+def unblock_user(user_id: str):
+    """Spec 09: Desbloquea manualmente a un usuario marcado como spammer."""
     try:
-        response = supabase.table('orus_users').select('session_mode').execute()
-        users = response.data
-        total = len(users)
-        if total == 0:
-            return {"total_users": 0, "ai_managed": 0, "human_managed": 0, "human_intervention_rate": "0.0%"}
-        
-        ai_count = sum(1 for u in users if u.get('session_mode') == 'AI')
-        human_count = total - ai_count
-        
-        return {
-            "total_users": total,
-            "ai_managed": ai_count,
-            "human_managed": human_count,
-            "human_intervention_rate": f"{(human_count / total) * 100:.1f}%"
-        }
+        # 1. Obtener phone_number para limpiar el rate limiter
+        user_res = supabase.table('orus_users').select('phone_number').eq('id', user_id).execute()
+        if not user_res.data:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        phone_number = user_res.data[0]['phone_number']
+
+        # 2. Desbloquear en Supabase
+        supabase.table('orus_users').update(
+            {'is_blocked': False}
+        ).eq('id', user_id).execute()
+
+        # 3. Limpiar rate limiter in-memory
+        clear_rate_limit(phone_number)
+
+        # 4. Registrar acción de auditoría
+        log_security_event(
+            severity='WARNING',
+            event_type='MANUAL_UNBLOCK',
+            source=phone_number,
+            message=f'Usuario {user_id} desbloqueado manualmente por admin'
+        )
+
+        return {"status": "success", "message": f"Usuario {user_id} desbloqueado correctamente."}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@metrics_router.get("/conversion")
-def get_conversion_metrics():
-    try:
-        response = supabase.table('orus_users').select('payment_status, total_spent').execute()
-        users = response.data
-        total = len(users)
-        if total == 0:
-            return {"total_users": 0, "paid_users": 0, "total_revenue": 0.0, "conversion_rate": "0.0%"}
-        
-        paid_count = sum(1 for u in users if u.get('payment_status') == 'pagado')
-        total_revenue = sum(float(u.get('total_spent', 0)) for u in users)
-        
-        return {
-            "total_users": total,
-            "paid_users": paid_count,
-            "total_revenue": total_revenue,
-            "conversion_rate": f"{(paid_count / total) * 100:.1f}%"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+

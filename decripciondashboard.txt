@@ -1,0 +1,82 @@
+Informe Técnico Completo — Orus Command Center
+Nombre del Proyecto: dashboard-orus
+Identidad Visual / Branding: "Orus-quiro" (Marca principal en Sidebar) y "Camino del Escultor" (Sub-marca en Header).
+Fecha del Informe: 15 de Mayo de 2026 (Basado en la bitácora de desarrollo del 25 de Abril de 2026 y código actual).
+
+1. Stack Tecnológico y Dependencias
+El proyecto utiliza un entorno moderno optimizado para rendimiento y desarrollo ágil.
+
+Core: React ^19.2.5, Vite ^8.0.10
+Enrutamiento: React Router DOM ^7.14.2
+Estilos y CSS: Tailwind CSS ^3.4.19, PostCSS ^8.5.10, Autoprefixer ^10.5.0
+Tipografía: Public Sans configurada como fuente principal en tailwind.config.js.
+Utilidades de UI:
+lucide-react ^1.11.0 (Iconografía vectorial).
+clsx ^2.1.1 y tailwind-merge ^3.5.0 (Para composición condicional y segura de clases CSS).
+2. Arquitectura del Frontend y Layout Base
+La aplicación sigue una arquitectura modular donde un contenedor persistente envuelve las vistas dinámicas:
+
+Enrutamiento y Composición
+AppLayout.jsx: Es el componente envoltura de máxima jerarquía. Utiliza un contenedor flex h-screen overflow-hidden bg-slate-900 para ocupar toda la pantalla sin generar scroll a nivel global.
+Outlet: Componente de React Router utilizado dentro del <main> del layout para inyectar dinámicamente las páginas (DashboardView, InboxChatView, CalendarView, SystemLogsView).
+Componentes Estructurales
+Sidebar (Barra Lateral):
+Ancho fijo de w-64, fondo bg-slate-950.
+Sin borde derecho (border-r eliminado) para fusionarse con el layout.
+Cuenta con una sombra lateral pesada shadow-[10px_0_30px_rgba(0,0,0,0.5)] que crea un efecto 3D de "flotación" por encima del Header y el área de trabajo.
+Header (Barra Superior):
+Altura fija h-16, posicionado estáticamente (sticky top-0) con z-40.
+Fondo y Degradado: Presenta un degradado horizontal profundo (#04050a al 0% hasta #0c0e12f2 al 100%) que simula la transición de la luz desde la Sidebar hacia la derecha.
+Efectos Visuales: Contiene una línea de brillo superior de 1px (h-px via-white/[0.08]) para emular un biselado 3D, además de backdrop-blur-xl.
+Barra de Búsqueda "Crystal Glass": Input con fondo bg-white/[0.06], desenfoque backdrop-blur-md e interacciones de estado (glow esmeralda en focus). El ícono de lupa mantiene un z-10 para prevenir distorsiones por el backdrop filter.
+Franja de Marca: Un gradiente visual que contiene el texto "Camino del Escultor" en color oro (#d4a017), montado de forma desvanecida.
+Área Principal (<main>):
+Implementa overflow-hidden. Este fue un cambio crítico para eliminar las barras de scroll fantasmas que afectaban al Layout. Ahora, el control de scroll es delegado exclusivamente a los componentes contenedores de cada vista (overflow-auto interno).
+3. Sistema de Diseño (Design Tokens & Theming)
+La estrategia visual de la aplicación evolucionó desde un simple esquema claro/oscuro hacia un Sistema de Contraste Radial Selectivo muy sofisticado.
+
+Paleta Base y Tipografía
+Tipografía: font-public-sans en toda la app con tamaño base text-sm.
+Acento Principal: Esmeralda (emerald-400, #34d399) para estados activos, textos destacados de la marca ("Orus-quiro"), y glows de interacción.
+Acentos Secundarios de Estado: Ambar (Warnings/Bot Success), Rojo (Urgente/Handovers), Oro (#d4a017) para branding estético secundario.
+Entorno de las Vistas (Fondo Radial)
+Todas las páginas internas utilizan un fondo inyectado dinámicamente mediante: radial-gradient(circle at 50% 50%, #ffffff 0%, #fafafa 40%, #f0f0f0 75%, #e9e9e9 100%) Esto crea una "esfera de luz" que enfoca la vista del usuario en el centro, simulando un lienzo de trabajo iluminado sobre el cual "flotan" las tarjetas de datos.
+
+Sistema de Tarjetas (Cards)
+El diseño se sustenta en dos constantes CSS exportadas para uso transversal:
+
+glassCard (Estructural / Navegación - Slate):
+Uso: Contenedores generales, paneles secundarios y navegación interna.
+Fondo: bg-gradient-to-br from-slate-800 to-slate-950
+Efectos: Borde slate-700/50, backdrop-blur-md
+Sombra: shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] (Sombra dura externa + resplandor interno).
+darkCard (Alto Contraste de Datos - Zinc/Black):
+Uso: Visualización intensiva de datos (Gráficos, Chats activos, Tablas de logs). Busca maximizar el contraste de la tipografía.
+Fondo: bg-gradient-to-br from-zinc-900 to-black
+Efectos: Borde zinc-700/50, backdrop-blur-md
+Sombra: Idéntica al GlassCard para mantener la consistencia de elevación 3D.
+4. Estado Actual de los Módulos (Views)
+Cada módulo ha sido limpiado de fondos de imagen (como antiguas mandalas de 1200px) reduciendo su padding a p-4 y su gap a gap-4 para maximizar el área útil.
+
+DashboardView.jsx
+KPI Cards: Utilizan el glassCard pero con un radial glow dinámico y efectos inyectados como accentColor y borderAccent.
+Actividad de Usuarios (Chart): Un gráfico de barras custom hecho en puro flex/divs, alojado dentro de un darkCard para contraste máximo. Cuenta con tooltips y transiciones group-hover.
+Handovers: Módulo tipo lista dentro de un glassCard con control de overflow interno (no-scrollbar), diseñado para priorizar estados de alerta (tarjetas en rojo cuando son urgentes).
+InboxChatView.jsx
+Presenta un layout de 3 columnas (Lista, Chat, "Inteligencia del Cliente").
+Distribución del Tema: Las columnas laterales están construidas con glassCard (Slate), mientras que el hilo de chat central se aísla con darkCard (Zinc/Negro).
+Corrección reciente: Se solucionó el truncamiento de la vista "Total Gastado" en el panel derecho estableciendo flex-1 overflow-y-auto no-scrollbar e iterando sobre reducciones de tamaño de componentes como los avatares.
+SystemLogsView.jsx (Especificado en Bitácora)
+El encabezado y los filtros utilizan glassCard.
+La tabla principal (data grid) utiliza darkCard para destacar la gravedad (severities) de los registros del sistema.
+CalendarView.jsx (Especificado en Bitácora)
+La cuadrícula principal de fechas usa glassCard.
+El panel inspector de citas y ubicación a la derecha usa darkCard.
+5. Integraciones Pendientes y Próximos Pasos Técnicos
+Según los documentos de planificación, la Fase 1 (Frontend Layout) está mayoritariamente ejecutada. Los siguientes pasos estratégicos para madurar la aplicación son:
+
+Integración de Backend: Acoplar InboxChatView y DashboardView a la API FastAPI planificada.
+Gestión de Estado (State Management): Implementación de la Context API o una librería equivalente (Zustand/Redux) para manejar la sesión del usuario (actualmente en código duro como Admin User) y el estado intermodular.
+Modales / Overlays: Construcción del sistema de diálogos usando la misma estética 3D crystal sin distorsionar el apilamiento de contextos (z-index).
+Adaptabilidad (Responsive Design): Configurar comportamientos para colapsar la Sidebar a iconos en anchos menores a 1280px (xl), ya que actualmente la estructura tiene anchos absolutos fuertes.
+Optimización (Performance): Introducir React.memo en la grilla del calendario y los componentes de métricas (MetricCard) para evitar re-renderizados innecesarios cuando lleguen datos a través de websockets o polling intensivo.

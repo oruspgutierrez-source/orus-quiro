@@ -1,0 +1,1112 @@
+{
+  "name": "orbe",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "templatemestre",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2736,
+        1024
+      ],
+      "id": "165ffcb3-f09c-490a-9d90-40a4360e6084",
+      "name": "Webhook",
+      "webhookId": "a21a4a83-b03e-479d-a73f-b5712b86eec0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "65eabf61-9314-45cd-b9f1-84f122b27588",
+              "leftValue": "={{ $json.body.isGroup }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "49011f05-5816-44b8-8322-6da61a03203f",
+              "leftValue": "={{ $json.body.isGroup }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "4fa154fa-7c06-4b93-9691-3ef2dcfd6157",
+              "leftValue": "={{ $json.body.broadcast }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "dc52fb7e-eb3e-4de0-a2aa-cc0bc040cf96",
+              "leftValue": "={{ $json.body.isNewsletter }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "39d7eabd-53b7-4e98-bda4-2637a352ed49",
+              "leftValue": "={{ $json.body.fromApi }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        -2528,
+        1024
+      ],
+      "id": "ee97a976-9179-42fa-a35b-59f855df8ac8",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cbeca844-cfa8-46e5-9298-f2edb243ed7f",
+              "name": "Mensagem",
+              "value": "={{ $json.message }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1664,
+        672
+      ],
+      "id": "9d4d4d57-fef2-4b18-9f0a-85c396c733d7",
+      "name": "Edit texto"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a017f535-7ec8-4dc9-8f0f-4425b5c17a11",
+              "name": "ERROR",
+              "value": "<Errorformatomensaje>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1696,
+        1600
+      ],
+      "id": "98c77d1a-ae5f-4a90-b1af-297bb93d378d",
+      "name": "Edit ERROR"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "id": "d5ee34d0-dd25-4317-b619-23d641396c90"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "38018137-f631-4bc1-ac7d-547357ffe4ec",
+                    "leftValue": "={{ $json.body.audio.audioUrl }}",
+                    "rightValue": "={{ $json.audio }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "20b97bd9-dfb1-463c-8089-339dd80c43ce",
+                    "leftValue": "={{ $json.imagen }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "imagen"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c80389c0-29a2-4197-a670-72dced63c1f2",
+                    "leftValue": "={{ $json.body.document.documentUrl }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pdf"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b1e46a8a-14ad-410e-8177-f0ecce6c905f",
+                    "leftValue": "video",
+                    "rightValue": "={{ $json.video.Url }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "video"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "OTRO"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -2096,
+        976
+      ],
+      "id": "df7fa153-4167-42c5-b169-eba7c70e5461",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('Simplificação de Dados').item.json.userID }}_buffer",
+        "messageData": "=<MensajeUsuario>\n  {{ $json.Mensagem || $('Telegram Trigger').item.json.message.text }}\n</MensajeUsuario>",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        672
+      ],
+      "id": "6f02ab16-a8d7-4c8f-a859-714b37c1caf8",
+      "name": "Redis"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "messageData": "={{ $json.ERROR }}",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1296,
+        1600
+      ],
+      "id": "e2478d53-7e5f-4855-b041-7f29e3caf363",
+      "name": "Redis2"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "messageData": "=<ContextoAudio>   <Transcripcion>     {{ $json.text || $json.content.parts[0].text }}   </Transcripcion>   <Nota>     Esto es una transcripción exacta de lo que el usuario dijo verbalmente.   </Nota> </ContextoAudio>",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1296,
+        832
+      ],
+      "id": "9ab2b063-ad3d-4fa2-9a9c-8a52e73e2778",
+      "name": "Redis3"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "messageData": "=<ContextoImagem>   <DescripcionVisual>     {{ $json.content.parts[0].text }}   </DescripcionVisual>   <NotaDelUsuario>     {{ $('Telegram Trigger').item.json.message.caption || \"Sin nota adjunta\" }}   </NotaDelUsuario> </ContextoImagem>",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        1024
+      ],
+      "id": "cd464549-0725-4585-a339-6cccd4a96dfc",
+      "name": "Redis4"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "messageData": "=<ContextoPDF>   <Archivo>     <Nombre>{{ $('HTTP Request3').item.json.file.name }}</Nombre>     <URI>{{ $('HTTP Request3').item.json.file.uri }}</URI>     <Tipo>PDF</Tipo>   </Archivo>   <InstruccionSistema>     ⚠️ ATENCIÓN: El usuario acaba de subir este documento.     ACCIÓN OBLIGATORIA: Usa la herramienta 'consultar_documento' con la URI proporcionada arriba para leerlo inmediatamente.   </InstruccionSistema>   <MensajeUsuarioAdjunto>     {{ $('Telegram Trigger').item.json.message.caption || $('Telegram Trigger').item.json.message.text || \"Sin comentario\" }}   </MensajeUsuarioAdjunto> </ContextoPDF>",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        1200
+      ],
+      "id": "4c4c623a-176a-48a1-a3b1-138081b8f75e",
+      "name": "Redis5"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "mensagens",
+        "key": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        1024
+      ],
+      "id": "db90c857-434f-4178-a730-8ee03f48619e",
+      "name": "redis baffer1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "mensagens",
+        "key": "={{ $('Simplificação de Dados').item.json.userID }}_buffer",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        1024
+      ],
+      "id": "976b5a1d-9329-47fd-bbfd-afb1a284c6e0",
+      "name": "redis baffer2"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $('Simplificação de Dados').item.json.userID }}_buffer"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1008
+      ],
+      "id": "62664a02-a447-4398-92a9-24cbbf161e39",
+      "name": "Redis1"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -592,
+        1024
+      ],
+      "id": "0625ebb4-33a0-4b8e-84b5-6e5ccf2c96f5",
+      "name": "Wait1",
+      "webhookId": "38f3d74b-8c28-4eb0-b98f-7a8d275f43d3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1c50705-841c-4ff1-af5b-698fcdd78a3f",
+              "leftValue": "={{ $('redis baffer1').item.json.mensagens.last() }}",
+              "rightValue": "={{ $json.mensagens.last() }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -288,
+        1024
+      ],
+      "id": "49ad7f94-ed6e-4d3c-a048-dd9f7654ba9e",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        1184
+      ],
+      "id": "afa25939-2f7a-45a4-a52a-6aea7856194b",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.audio.audioUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1680,
+        832
+      ],
+      "id": "b4660bfe-c9ef-49cb-a64f-ad7a142b0a45",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-lite"
+        },
+        "text": "quiero una descripcion completa del contenido del audio sin omitir informacion como sonidos adyacentes voz y cada detalle que puedas identificar describelo",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        832
+      ],
+      "id": "d8b4638e-cffc-40fd-bdad-f7f1cc1f46e9",
+      "name": "Analyze audio"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "80dbc532-0bd4-4828-b707-2ce8d1b58df5",
+              "name": "number",
+              "value": "={{ $json.body.connectedPhone }}",
+              "type": "string"
+            },
+            {
+              "id": "b1bccb51-a0b6-4983-a951-e3cd4f975965",
+              "name": "text",
+              "value": "={{ $json.body.text.message }}",
+              "type": "string"
+            },
+            {
+              "id": "20838327-3a8e-4893-8322-36b97ce695f5",
+              "name": "name",
+              "value": "={{ $json.body.senderName }}",
+              "type": "string"
+            },
+            {
+              "id": "98ede45a-d1bb-41d1-9a32-d810fbeb8870",
+              "name": "audio.Url",
+              "value": "={{ $json.body.audio.audioUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "b9716024-9130-4e56-9809-f24d6123a36d",
+              "name": "imagen",
+              "value": "={{ $json.body.image?.imageUrl || $json.body.imageUrl || Object.values($json.body).find(v => v?.imageUrl)?.imageUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "7f9fc8e6-c616-47e6-91b7-29afba856368",
+              "name": "document0.Url",
+              "value": "={{ $json.body.document.documentUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "963c98fb-7e46-4067-bfb0-071d59946a0d",
+              "name": "documento.caption",
+              "value": "={{ $json.body.document.caption }}",
+              "type": "string"
+            },
+            {
+              "id": "4e2dec38-8c8d-4062-b4da-0eaab87c40ce",
+              "name": "video.Url",
+              "value": "={{ $json.body.video.videoUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "43ca9c93-fbe5-4405-bf76-887b39d368a8",
+              "name": "body.video.caption",
+              "value": "={{ $json.body.video.caption }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2320,
+        1024
+      ],
+      "id": "500108a3-7038-4f1e-bb1c-3cbbcff5be73",
+      "name": "simplificar datos"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.imagen }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1680,
+        1024
+      ],
+      "id": "77914c4a-9331-4cae-bfce-f48608b7585f",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash-lite"
+        },
+        "text": "analiza cada elemento de la imagen y genera una decripcion detallada",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        1024
+      ],
+      "id": "934b211a-b160-4bcb-958b-7bbee824683a",
+      "name": "Analyze an image"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.document.documentUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1680,
+        1200
+      ],
+      "id": "7e079c3d-426b-4143-b3fe-c0ef7f2b3b25",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-pro",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-pro"
+        },
+        "text": "analisa el documento a profundidad y genera un relatorio minusioso sobre su contenido ",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        1200
+      ],
+      "id": "e167607f-7186-402e-822f-34599ed6dab6",
+      "name": "Analyze document"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('simplificar datos').item.json.number }}_buffer",
+        "messageData": "=<ContextoPDF>   <Archivo>     <Nombre>{{ $('HTTP Request5').item.json.file.name }}</Nombre>     <URI>{{ $('HTTP Request5').item.json.file.uri }}</URI>     <Tipo>PDF</Tipo>   </Archivo>   <InstruccionSistema>     ⚠️ ATENCIÓN: El usuario acaba de subir este documento.     ACCIÓN OBLIGATORIA: Usa la herramienta 'consultar_documento' con la URI proporcionada arriba para leerlo inmediatamente.   </InstruccionSistema>   <MensajeUsuarioAdjunto>     {{ $('Telegram Trigger').item.json.message.caption || $('Telegram Trigger').item.json.message.text || \"Sin comentario\" }}   </MensajeUsuarioAdjunto> </ContextoPDF>",
+        "tail": true
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        1376
+      ],
+      "id": "d44df474-c262-427b-979b-2e3c5b638a0c",
+      "name": "Redis6"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.video.Url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1680,
+        1376
+      ],
+      "id": "4cdb34be-d2fd-435d-b552-d297816705f5",
+      "name": "HTTP Request5"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3-flash-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3-flash-preview"
+        },
+        "text": "analisa minuciosamente cada detalle de este video y genera una descripcion detallada de lo que vez centrate en el objeto principal y detallalo aprofundidad",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -1472,
+        1376
+      ],
+      "id": "32163c42-b901-4323-87a5-cbb94c2c539b",
+      "name": "Analyze video"
+    },
+    {
+      "parameters": {
+        "operation": "deleteTable",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_chat_histories",
+          "mode": "list",
+          "cachedResultName": "n8n_chat_histories"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -464,
+        3760
+      ],
+      "id": "f0027f5f-0a41-44ff-98a0-d73c377237de",
+      "name": "Delete table or rows"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c3e055df-21a4-4f72-a8f4-97066811669d",
+              "name": "mensaggens",
+              "value": "={{ $json.mensagens.join('\\n\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        144,
+        1008
+      ],
+      "id": "18d57f38-9bf3-4891-90dc-b9b6ff7b9e36",
+      "name": "unificar lista1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6f9afb63-711c-4416-81d8-07f3512ce7f2",
+              "name": "uri_objetivo",
+              "value": "={{ $json.mensaggens && $json.mensaggens.match(/<URI>(.*?)<\\/URI>/) ? $json.mensaggens.match(/<URI>(.*?)<\\/URI>/)[1] : \"null\" }}",
+              "type": "string"
+            },
+            {
+              "id": "af81d554-b951-4807-aa7e-c4f2adc3a193",
+              "name": "instruccion_usuario",
+              "value": "={{  $json.mensaggens.includes(\"<ContextoPDF>\") ?  ($json.mensaggens.match(/<MensajeUsuarioAdjunto>(.*?)<\\/MensajeUsuarioAdjunto>/) ?  $json.mensaggens.match(/<MensajeUsuarioAdjunto>(.*?)<\\/MensajeUsuarioAdjunto>/)[1] :  ($json.mensaggens.match(/<MensajeUsuario>(.*?)<\\/MensajeUsuario>/) ?  $json.mensaggens.match(/<MensajeUsuario>(.*?)<\\/MensajeUsuario>/)[1] :  \"Analiza este documento.\")) :  $json.mensaggens  }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        1008
+      ],
+      "id": "f90aac84-bc9d-4604-948a-39a096043efe",
+      "name": "Filtro_Datos_Limpios2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "simplificar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit texto": {
+      "main": [
+        [
+          {
+            "node": "Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit ERROR": {
+      "main": [
+        [
+          {
+            "node": "Redis2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "Edit texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit ERROR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis": {
+      "main": [
+        [
+          {
+            "node": "redis baffer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis2": {
+      "main": [
+        [
+          {
+            "node": "redis baffer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis3": {
+      "main": [
+        [
+          {
+            "node": "redis baffer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis4": {
+      "main": [
+        [
+          {
+            "node": "redis baffer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis5": {
+      "main": [
+        [
+          {
+            "node": "redis baffer1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis baffer1": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis baffer2": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "redis baffer2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Redis1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Analyze audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze audio": {
+      "main": [
+        [
+          {
+            "node": "Redis3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "simplificar datos": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Redis4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Analyze document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze document": {
+      "main": [
+        [
+          {
+            "node": "Redis5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "Analyze video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze video": {
+      "main": [
+        [
+          {
+            "node": "Redis6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "unificar lista1": {
+      "main": [
+        [
+          {
+            "node": "Filtro_Datos_Limpios2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis1": {
+      "main": [
+        [
+          {
+            "node": "unificar lista1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ad5ad68a-e500-4c29-a15b-502ab90d3188",
+  "meta": {
+    "instanceId": "1b2a15af643f4987d61172a42c8e604271710c637b34bd9b7dc2fe1ad70c388d"
+  },
+  "id": "tPv7QNBjHjup20gc",
+  "tags": []
+}

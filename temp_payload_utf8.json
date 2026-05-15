@@ -1,0 +1,35 @@
+{
+  "data": {
+    "key": {
+      "id": "ACBCDC0A8C21261E384F30ED302A8428",
+      "fromMe": false,
+      "remoteJid": "37598781259882@lid"
+    },
+    "source": "android",
+    "status": "DELIVERY_ACK",
+    "message": {
+      "conversation": "Que significa el monte",
+      "messageContextInfo": {
+        "messageSecret": "C+XfNkEOGbGwZos4Yn4gQQV2Fp2hs18h4mAxKQb8Lgk=",
+        "deviceListMetadata": {
+          "senderKeyHash": "EfoQ63isFBrfag==",
+          "senderTimestamp": "1776981547",
+          "recipientKeyHash": "8xvDZbW5IblwCg==",
+          "recipientTimestamp": "1777939688"
+        },
+        "deviceListMetadataVersion": 2
+      }
+    },
+    "pushName": "orus pe\u00f1a",
+    "instanceId": "44936e61-679c-405f-8bd0-f40071e195bd",
+    "messageType": "conversation",
+    "messageTimestamp": 1777942083
+  },
+  "event": "messages.upsert",
+  "apikey": "0B00D777-E03E-47B2-8398-2967A3EA2E33",
+  "sender": "553798433269@s.whatsapp.net",
+  "instance": "OrusBot",
+  "date_time": "2026-05-04T21:48:03.671Z",
+  "server_url": "https://whatsapp.orusquiroterapia.online",
+  "destination": "https://annually-murmuring-reuse.ngrok-free.dev/webhook"
+}

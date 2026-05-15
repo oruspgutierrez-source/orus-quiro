@@ -68,11 +68,11 @@ def book_appointment(phone_number: str, date_time: str, name: str) -> str:
             'description': f'Teléfono: {phone_number}',
             'start': {
                 'dateTime': start_time.isoformat(),
-                'timeZone': 'UTC',
+                'timeZone': 'America/Sao_Paulo',
             },
             'end': {
                 'dateTime': end_time.isoformat(),
-                'timeZone': 'UTC',
+                'timeZone': 'America/Sao_Paulo',
             },
         }
         event_res = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
