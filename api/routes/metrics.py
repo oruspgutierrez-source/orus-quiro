@@ -50,8 +50,9 @@ def get_conversion_metrics():
 def get_weekly_appointments():
     """Total de citas por semana (usuarios con appointment_date no nulo)"""
     try:
-        response = supabase.table('orus_users').select('appointment_date').not_('appointment_date', 'is', 'null').execute()
-        return {"total_appointments": len(response.data), "data": response.data}
+        response = supabase.table('orus_users').select('appointment_date').execute()
+        valid_appointments = [u for u in response.data if u.get('appointment_date') is not None]
+        return {"total_appointments": len(valid_appointments), "data": valid_appointments}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

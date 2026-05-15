@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import datetime
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -26,8 +27,11 @@ async def generate_response(prompt: str, media: list[dict] | None = None) -> dic
             - "file_name": nombre del archivo (opcional, solo docs)
     """
     
-    system_rules = """REGLAS DE FORMATO Y ENTREGA (CRÍTICO):
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    system_rules = f"""REGLAS DE FORMATO Y ENTREGA (CRÍTICO):
 Eres Orus, asistente de ventas y dudas de un experto en quiromancia védica.
+FECHA Y HORA ACTUAL DEL SISTEMA: {now_str} (Úsala como referencia para "hoy", "mañana", "próximo lunes", etc.)
+
 Actúas a través de un chat de mensajería instantánea (tipo WhatsApp). Para que la lectura sea fluida y humana, DEBES fragmentar tus respuestas largas en múltiples mensajes cortos. 
 
 Utiliza exactamente tres barras verticales (|||) para separar cada mensaje que el usuario debe recibir de forma individual.
@@ -69,7 +73,15 @@ Cuando el usuario envíe contenido multimedia, responde según el tipo:
 4. DOCUMENTO (PDF, etc.):
    - Lee el contenido del documento.
    - Resume los puntos principales y responde preguntas sobre él.
-   - Si el documento no tiene relación con el servicio, redirige amablemente."""
+   - Si el documento no tiene relación con el servicio, redirige amablemente.
+
+IMPORTANTE: Tu respuesta final SIEMPRE debe ser un JSON válido, sin bloques de código Markdown (```json ... ```).
+ESTRUCTURA DEL JSON:
+{{
+  "reply": "Tu respuesta dividida con ||| y terminando con [##EOS##]",
+  "sentiment": "Frustración | Duda | Interés | etc",
+  "requires_human": false o true
+}}"""
 
     from api.services.calendar_client import check_free_slots, book_appointment
 
@@ -85,9 +97,7 @@ Cuando el usuario envíe contenido multimedia, responde según el tipo:
 
         config = types.GenerateContentConfig(
             system_instruction=system_rules,
-            tools=tools,
-            response_mime_type="application/json",
-            response_schema=OrusResponse
+            tools=tools
         )
         
         # ── Construir contenidos iniciales ──────────────────────────────────
@@ -115,7 +125,7 @@ Cuando el usuario envíe contenido multimedia, responde según el tipo:
         max_turns = 5
         for _ in range(max_turns):
             response = await client.aio.models.generate_content(
-                model='gemini-2.0-flash',  # Usando 2.0 que es el estándar actual para FC estable
+                model='gemini-2.5-flash',
                 contents=contents,
                 config=config
             )
@@ -126,7 +136,16 @@ Cuando el usuario envíe contenido multimedia, responde según el tipo:
             if not function_calls:
                 # Si no hay funciones, asumimos que es la respuesta final en JSON
                 try:
-                    parsed_json = json.loads(response.text)
+                    # Limpiar el texto por si viene con markdown
+                    raw_text = response.text.strip()
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text[7:]
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text[3:]
+                    if raw_text.endswith("```"):
+                        raw_text = raw_text[:-3]
+                    
+                    parsed_json = json.loads(raw_text.strip())
                     return parsed_json
                 except Exception as e:
                     print(f"[Gemini] Error parseando respuesta final: {e}\nRaw: {response.text}")

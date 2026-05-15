@@ -32,6 +32,6 @@
 - **Seguridad RLS:** El script `rls_policies.sql` está listo, pero debe ser ejecutado **MANUALMENTE** en la consola SQL de Supabase para evitar cargos por herramientas MCP (Economy Protocol).
 
 ## 🚀 Próximos Pasos
-1. **Acción Humana Requerida:** Ejecutar el código de `rls_policies.sql` en el SQL Editor de Supabase.
-2. Hacer `git add .`, `git commit -m "feat(spec08): API de métricas y seguridad RLS"` y `git push`.
-3. Desplegar en la VPS (EasyPanel).
+1. **Task 5 (COMPLETO):** Pruebas locales a los endpoints de métricas y flujo de agendamiento (Function Calling) de Gemini superadas. Todo funcional.
+2. **Acción Humana Requerida:** Ejecutar el código de `rls_policies.sql` en el SQL Editor de Supabase.
+3. Desplegar en la VPS (EasyPanel) una vez verificadas las pruebas locales.
