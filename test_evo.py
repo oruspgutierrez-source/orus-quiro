@@ -22,12 +22,13 @@ async def test_number(number, label):
     
     headers = {
         "apikey": API_KEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Host": "whatsapp.orusquiroterapia.online"
     }
     
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.post(endpoint, json=payload, headers=headers) as response:
+            async with session.post(endpoint, json=payload, headers=headers, ssl=False) as response:
                 data = await response.json()
                 print(f"Status HTTP: {response.status}")
                 print(f"Respuesta API: {data}")

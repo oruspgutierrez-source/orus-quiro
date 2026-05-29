@@ -125,3 +125,88 @@ async def receive_webhook(request: Request):
         print(f"[Webhook] Mensaje de {sender_id} bufferizado{media_label}", flush=True)
 
     return {"status": "ok"}
+
+
+@router.post("/api/biometrics/completed")
+async def biometrics_completed(request: Request):
+    """
+    Endpoint para recibir la notificación de Supabase Database Webhook
+    cuando el usuario completa la carga de fotos biométricas.
+    """
+    from api.db.supabase_client import supabase
+    from api.services.wa_client import wa_client
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    print(f"[Supabase Webhook] Payload recibido: {json.dumps(payload, indent=2)}", flush=True)
+
+    record = payload.get("record")
+    if not record:
+        if "wa_id" in payload:
+            record = payload
+        else:
+            return {"status": "ignored", "reason": "no_record"}
+
+    # Opción B: Fotos completadas debe ser True
+    if not record.get("fotos_completadas"):
+        return {"status": "ignored", "reason": "fotos_completadas_not_true"}
+
+    wa_id = record.get("wa_id")
+    nombre = record.get("nombre") or "Consultante"
+
+    if not wa_id:
+        return {"status": "ignored", "reason": "no_wa_id"}
+
+    # Formatear a JID compatible con WhatsApp
+    to_jid = str(wa_id).strip()
+    if "@" not in to_jid:
+        to_jid = f"{to_jid}@s.whatsapp.net"
+
+    msg_text = f"¡Excelente, *{nombre}*! Hemos recibido tus fotografías biométricas con total éxito. Con esto completamos oficialmente todo tu proceso de preparación.\n\nTu hardware biológico ha sido registrado y el ciclo de configuración de tu Auditoría Biosemiótica está cerrado. Te deseo el mayor de los éxitos en tu camino de Re-Ingeniería de aquí hasta el día de nuestra charla de Revelación. ¡Nos vemos pronto!"
+
+    try:
+        # Buscar usuario para registrar en orus_messages
+        user_check = supabase.table('orus_users').select('id').eq('phone_number', to_jid).execute()
+        if user_check.data:
+            user_uuid = user_check.data[0].get('id')
+            supabase.table('orus_messages').insert({
+                'user_id': user_uuid,
+                'role': 'assistant',
+                'content': msg_text
+            }).execute()
+            print(f"[Supabase Webhook] Mensaje registrado en orus_messages para user_uuid={user_uuid}", flush=True)
+        else:
+            # Si no existe, crear usuario e insertar mensaje
+            new_user = supabase.table('orus_users').insert({'phone_number': to_jid}).execute()
+            if new_user.data:
+                user_uuid = new_user.data[0].get('id')
+                supabase.table('orus_messages').insert({
+                    'user_id': user_uuid,
+                    'role': 'assistant',
+                    'content': msg_text
+                }).execute()
+                print(f"[Supabase Webhook] Usuario creado y mensaje registrado para user_uuid={user_uuid}", flush=True)
+
+        # Enviar notificación WhatsApp
+        await wa_client.send_message(to=to_jid, text=msg_text)
+        print(f"[Supabase Webhook] Notificación enviada a {to_jid}", flush=True)
+
+        return {"status": "success", "message": "notification_sent", "to": to_jid}
+
+    except Exception as e:
+        print(f"[Supabase Webhook] Error procesando notificación: {e}", flush=True)
+        # Registrar log del error en orus_logs
+        try:
+            supabase.table('orus_logs').insert({
+                'event_type': 'WEBHOOK_BIOMETRICS_ERROR',
+                'source_identifier': to_jid,
+                'error_message': str(e)
+            }).execute()
+        except Exception as db_exc:
+            print(f"Fallo al registrar log de error: {db_exc}", flush=True)
+        
+        raise HTTPException(status_code=500, detail=str(e))
+

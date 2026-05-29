@@ -17,7 +17,8 @@ class WhatsAppClient:
     def _get_headers(self):
         return {
             "apikey": self.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Host": "whatsapp.orusquiroterapia.online"
         }
 
     async def resolve_lid(self, lid: str) -> str:
@@ -35,7 +36,7 @@ class WhatsAppClient:
         
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(endpoint, json={"where": {}}, headers=self._get_headers()) as response:
+                async with session.post(endpoint, json={"where": {}}, headers=self._get_headers(), ssl=False) as response:
                     if response.status == 200:
                         contacts = await response.json()
                         lid_contact = None
@@ -106,7 +107,7 @@ class WhatsAppClient:
                 await asyncio.sleep(wait_time)
                 
                 try:
-                    async with session.post(endpoint, json=payload, headers=self._get_headers(), timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    async with session.post(endpoint, json=payload, headers=self._get_headers(), timeout=aiohttp.ClientTimeout(total=30), ssl=False) as response:
                         response_text = await response.text()
                         
                         if response.status == 400:
@@ -176,17 +177,198 @@ class WhatsAppClient:
 
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(endpoint, json=payload, headers=self._get_headers()) as response:
+                async with session.post(endpoint, json=payload, headers=self._get_headers(), ssl=False) as response:
                     response_data = await response.json()
                     
                     if response.status not in (200, 201):
-                        print(f"Error enviando mensaje WA a {to}: {response.status} - {response_data}")
+                        print(f"Error enviando mensaje WA a {to}: status={response.status}", flush=True)
                     else:
-                        print(f"Éxito enviando a {to}: {response_data}")
+                        msg_id = response_data.get("key", {}).get("id", "unknown")
+                        print(f"Éxito enviando a {to}: status={response.status}, msg_id={msg_id}", flush=True)
                     
                     return response_data
             except Exception as e:
-                print(f"Excepción en send_message: {str(e)}")
+                # Evitar fallar por impresión de emojis en el mensaje de error original si los hubiera
+                print(f"Excepción en send_message para {to}: {type(e).__name__}", flush=True)
+                return {"error": str(e)}
+
+    async def send_audio_message(self, to: str, audio_path_or_url: str, delay: int = 1200) -> dict:
+        """
+        Envía un mensaje de audio (nota de voz pregrabada) a través de Evolution API.
+        Soporta URLs públicas o rutas locales de archivos (las cuales convierte a Base64).
+        """
+        if not self.api_url:
+            raise ValueError("EVOLUTION_API_URL no está configurada")
+
+        # Resolvemos el @lid si es necesario
+        to = await self.resolve_lid(to)
+
+        endpoint = f"{self.api_url}/message/sendWhatsAppAudio/{self.instance_name}"
+
+        # 1. Determinar si es una URL o una ruta local
+        audio_data = audio_path_or_url
+        if not (audio_path_or_url.startswith("http://") or audio_path_or_url.startswith("https://")):
+            # Es un archivo local. Leer y codificar a Base64
+            if not os.getenv("WORKSPACE_PATH"):
+                # Asumir ruta absoluta o relativa basada en Cwd
+                pass
+            
+            if not os.path.exists(audio_path_or_url):
+                raise FileNotFoundError(f"No se encontró el archivo de audio local: {audio_path_or_url}")
+            
+            with open(audio_path_or_url, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("utf-8")
+            
+            # Detectar mime-type por la extensión
+            ext = os.path.splitext(audio_path_or_url)[1].lower()
+            mime = "audio/ogg"
+            if ext == ".mp3":
+                mime = "audio/mpeg"
+            elif ext == ".wav":
+                mime = "audio/wav"
+            elif ext == ".ogg":
+                mime = "audio/ogg"
+            
+            audio_data = encoded
+
+        # 2. Configurar payload
+        payload = {
+            "number": to,
+            "audio": audio_data,
+            "delay": delay,
+            "encoding": True
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                # Usamos headers estándar y bypass SSL
+                async with session.post(endpoint, json=payload, headers=self._get_headers(), ssl=False) as response:
+                    response_data = await response.json()
+                    
+                    if response.status not in (200, 201):
+                        print(f"Error enviando audio WA a {to}: status={response.status}", flush=True)
+                    else:
+                        msg_id = response_data.get("key", {}).get("id", "unknown")
+                        print(f"Éxito enviando audio a {to}: status={response.status}, msg_id={msg_id}", flush=True)
+                    
+                    return response_data
+            except Exception as e:
+                # Evitar crashes de codificación en consola Windows
+                safe_err = str(e).encode('ascii', 'replace').decode('ascii')
+                print(f"Excepción en send_audio_message para {to}: {safe_err}", flush=True)
+                return {"error": str(e)}
+
+    async def send_text_then_audio(self, to: str, text: str, audio_path: str, text_delay: int = 1200, gap_seconds: float = 2.0) -> dict:
+        """
+        Envía un texto descriptivo, espera gap_seconds, y luego envía un audio.
+        Garantiza el orden de llegada en WhatsApp.
+        """
+        # Envía texto
+        res_text = await self.send_message(to, text)
+        if "error" in res_text:
+            return res_text
+        
+        # Delay
+        await asyncio.sleep(gap_seconds)
+        
+        # Envía audio
+        res_audio = await self.send_audio_message(to, audio_path, delay=text_delay)
+        return {"text_response": res_text, "audio_response": res_audio}
+
+    async def send_document_message(self, to: str, file_path: str, file_name: str, caption: str = "") -> dict:
+        """
+        Envía un documento (como un PDF) a través de Evolution API.
+        Convierte el archivo local a base64 y lo despacha de forma asíncrona.
+        """
+        if not self.api_url:
+            raise ValueError("EVOLUTION_API_URL no está configurada")
+
+        # Resolvemos el @lid si es necesario
+        to = await self.resolve_lid(to)
+
+        endpoint = f"{self.api_url}/message/sendMedia/{self.instance_name}"
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"No se encontró el archivo del documento local: {file_path}")
+
+        # Leer el archivo y codificarlo en Base64
+        with open(file_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+
+        # Usar la cadena base64 cruda sin prefijo para evitar el error 400 en Evolution API
+        media_data = encoded
+
+        payload = {
+            "number": to,
+            "media": media_data,
+            "mediatype": "document",
+            "fileName": file_name,
+            "caption": caption,
+            "delay": 1200
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(endpoint, json=payload, headers=self._get_headers(), ssl=False) as response:
+                    response_data = await response.json()
+                    
+                    if response.status not in (200, 201):
+                        print(f"Error enviando documento WA a {to}: status={response.status}", flush=True)
+                    else:
+                        msg_id = response_data.get("key", {}).get("id", "unknown")
+                        print(f"Éxito enviando documento a {to}: status={response.status}, msg_id={msg_id}", flush=True)
+                    
+                    return response_data
+            except Exception as e:
+                safe_err = str(e).encode('ascii', 'replace').decode('ascii')
+                print(f"Excepción en send_document_message para {to}: {safe_err}", flush=True)
+                return {"error": str(e)}
+
+    async def send_image_message(self, to: str, file_path: str, caption: str = "") -> dict:
+        """
+        Envía una imagen a través de Evolution API.
+        Convierte la imagen local a base64 y la despacha de forma asíncrona.
+        """
+        if not self.api_url:
+            raise ValueError("EVOLUTION_API_URL no está configurada")
+
+        # Resolvemos el @lid si es necesario
+        to = await self.resolve_lid(to)
+
+        endpoint = f"{self.api_url}/message/sendMedia/{self.instance_name}"
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"No se encontró la imagen local: {file_path}")
+
+        # Leer el archivo y codificarlo en Base64
+        with open(file_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+
+        media_data = encoded
+
+        payload = {
+            "number": to,
+            "media": media_data,
+            "mediatype": "image",
+            "caption": caption,
+            "delay": 1200
+        }
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(endpoint, json=payload, headers=self._get_headers(), ssl=False) as response:
+                    response_data = await response.json()
+                    
+                    if response.status not in (200, 201):
+                        print(f"Error enviando imagen WA a {to}: status={response.status}", flush=True)
+                    else:
+                        msg_id = response_data.get("key", {}).get("id", "unknown")
+                        print(f"Éxito enviando imagen a {to}: status={response.status}, msg_id={msg_id}", flush=True)
+                    
+                    return response_data
+            except Exception as e:
+                safe_err = str(e).encode('ascii', 'replace').decode('ascii')
+                print(f"Excepción en send_image_message para {to}: {safe_err}", flush=True)
                 return {"error": str(e)}
 
     async def send_reaction(self, to: str, message_id: str, emoji: str) -> dict:
@@ -215,7 +397,7 @@ class WhatsAppClient:
         
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(endpoint, json=payload, headers=self._get_headers()) as response:
+                async with session.post(endpoint, json=payload, headers=self._get_headers(), ssl=False) as response:
                     return await response.json()
             except Exception as e:
                 print(f"Excepción en send_reaction: {str(e)}")

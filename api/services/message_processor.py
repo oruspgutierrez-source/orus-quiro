@@ -252,14 +252,15 @@ async def _process_buffer(sender_id: str, payload: dict):
             return
 
         # ── 6. LLM con Memoria ────────────────────────────────────────────────
-        chat_context = ""
+        history_msgs = []
         if user_uuid:
             try:
                 history = supabase.table('orus_messages').select('role, content').eq('user_id', user_uuid).order('created_at', desc=True).limit(6).execute()
                 if history.data:
                     for msg in reversed(history.data):
-                        role_name = "Orus" if msg['role'] == 'assistant' else "Usuario"
-                        chat_context += f"{role_name}: {msg['content']}\n"
+                        gemini_role = "model" if msg['role'] == 'assistant' else "user"
+                        history_msgs.append({"role": gemini_role, "text": msg['content']})
+                
                 supabase.table('orus_messages').insert({
                     'user_id': user_uuid,
                     'role': 'user',
@@ -268,15 +269,15 @@ async def _process_buffer(sender_id: str, payload: dict):
             except Exception as e:
                 print(f"Error con historial/persistencia: {e}", flush=True)
 
-        prompt_with_context = f"Historial reciente:\n{chat_context}\nUsuario: {cleaned_text}\nOrus:"
+        prompt_with_context = f"[Metadatos del Remitente: JID={real_sender_id}]\nUsuario: {cleaned_text}"
 
         # ── 7. Llamar a Gemini (con media si existe) ───────────────────────────
         gemini_media = media_list if media_list else None
         print(f"[Processor] Llamando a Gemini para {real_sender_id}...{' (multimodal)' if gemini_media else ''}", flush=True)
         try:
             response_dict = await asyncio.wait_for(
-                generate_response(prompt_with_context, media=gemini_media),
-                timeout=60.0 if gemini_media else 30.0  # Más tiempo para multimodal
+                generate_response(prompt_with_context, media=gemini_media, history=history_msgs),
+                timeout=90.0  # Más tiempo para permitir Function Calling y media
             )
         except asyncio.TimeoutError:
             print(f"[Processor] Timeout: Gemini tardó demasiado para {real_sender_id}", flush=True)
@@ -302,6 +303,11 @@ async def _process_buffer(sender_id: str, payload: dict):
 
         # ── 8. Fragmentar y enviar ─────────────────────────────────────────────
         reply_clean = reply.replace("[##EOS##]", "").strip()
+
+        if "[AGENDA_COMPLETA]" in reply_clean or "[AUDIO_ENVIADO]" in reply_clean or "[COBRO_ENVIADO]" in reply_clean or "[SILENT_FALLBACK]" in reply_clean:
+            print("[Processor] Intercepción silenciosa de Gemini. Delegando envío visual al sistema.", flush=True)
+            return
+
         raw_chunks = re.split(r'\|{2,}', reply_clean)
         clean_chunks = [chunk.strip() for chunk in raw_chunks if len(chunk.strip()) > 1]
         if not clean_chunks:

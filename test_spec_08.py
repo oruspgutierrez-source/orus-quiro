@@ -27,11 +27,16 @@ async def test_gemini_scheduling():
     user_phone = "5491112345678"
     user_name = "Prueba Test"
     # Modificamos un poco el prompt para que caiga en check_free_slots o book_appointment
-    prompt = "Hola, ¿tienen turnos disponibles para el próximo lunes por la mañana?"
+    prompt = "Si perfecto"
     print(f"Prompt del usuario: '{prompt}'")
     
+    history = [
+        {"role": "user", "text": "Me gustaría el martes de la semana que viene a las 10 de la mañana mi número es 5537998869018 orus peña Gutiérrez"},
+        {"role": "model", "text": "¡Excelente! Estoy agendando tu cita para el martes 19 a las 10:00 AM. Por favor, confírmame que tu nombre completo es Orus Peña Gutiérrez y tu número de teléfono es 5537998869018 para que la reserva quede perfecta."}
+    ]
+    
     try:
-        response = await generate_response(prompt)
+        response = await generate_response(prompt, history=history)
         print(f"Respuesta de Gemini:\n{response}")
     except Exception as e:
         print(f"[ERROR] Gemini: {str(e)}")
