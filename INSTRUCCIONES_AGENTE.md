@@ -16,14 +16,16 @@
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Ultimo Estado (2026-06-01 - Tarde):** Pipeline completo depurado y validado.
-> - Spec 23 (Blindaje antierosivo): **COMPLETADO Y REFORZADO**. Se eliminó la dependencia de `contents` y se usa `last_executed_tool` para asegurar resiliencia en la respuesta de Gemini tras llamadas a herramientas.
-> - Flujo de Agendamiento (Fase 4): **ESTABILIZADO**. El bot ahora ejecuta una secuencia estricta: pide datos -> espera -> muestra resumen -> espera confirmación -> agenda.
-> - Spec 16 (Webhook Biométrico): **INTEGRADO Y DIAGNOSTICADO**. `calendar_client.py` ahora adjunta `?phone=numero` a la URL de Vercel. 
+> **Último Estado (2026-06-03 - Tarde):** Implementación en Producción y Vercel (Spec 25).
+> - Se desplegó el backend en EasyPanel VPS usando `api.orusquiroterapia.online`.
+> - Se desplegó el dashboard en Vercel (`dashboard-orus.vercel.app`) conectado en vivo a Supabase.
+> - Se configuró la variable `ADMIN_WHATSAPP_NUMBER` al número de la API de Meta para las alertas de Handover.
+> - El problema de `googleapiclient` fue solucionado haciendo push del `requirements.txt` actualizado.
 >
 > **Pendientes próxima sesión:**
-> - Verificar que el equipo de Frontend de React capture el parámetro `?phone` de la URL y lo guarde en la columna `wa_id` de la tabla `evaluaciones_completas` en Supabase. Una vez hecho esto, el webhook `pg_net` detonará automáticamente el mensaje de éxito de WhatsApp en el backend sin tocar más código del servidor.
-> - Realizar prueba de estrés del pipeline end-to-end con usuarios concurrentes.
+> - Modificar la pestaña "System Logs" en el Dashboard para consumir logs reales.
+> - Modificar "Inbox Chat" en el Dashboard para responder manualmente a los Handovers directamente desde la interfaz web.
+> - El usuario hará pruebas físicas enviando mensajes desde un celular alterno para verificar todo el flujo del Handover.
 
 ---
 

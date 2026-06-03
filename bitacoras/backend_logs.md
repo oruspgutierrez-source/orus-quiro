@@ -13,3 +13,10 @@
 - **Corrección:** Se dividió la Fase 4 del System Prompt en tres pasos estrictamente secuenciales (Paso 1: pedir datos y esperar, Paso 2: mostrar resumen y esperar, Paso 3: agendar) usando la instrucción imperativa `ESPERA SU RESPUESTA`.
 - **Error detectado 6:** El webhook reactivo pasivo `pg_net` de Supabase (Spec 16) no enviaba el mensaje de WhatsApp a pesar de que la App React cargaba las fotos. Se diagnosticó que la App React guardaba un ID genérico (`usuario_web_...`) en lugar del número de WhatsApp en la tabla `evaluaciones_completas`.
 - **Corrección:** Se modificó `calendar_client.py` para enviar la URL de Vercel concatenada con el parámetro `?phone={clean_phone}`, permitiéndole al Frontend de React capturar el teléfono real y guardarlo en la columna `wa_id` de Supabase.
+
+## Fecha: 2026-06-03
+- **Acción:** Despliegue en Producción (EasyPanel) con URL `api.orusquiroterapia.online` y conexión segura HTTPS (Traefik). Los webhooks en Evolution API y Stripe se actualizaron para apuntar a la nueva API segura, resolviendo errores de mixed-content en el frontend (Vercel).
+- **Error detectado 7:** Vercel cancelaba los builds del Dashboard de React porque accidentalmente se hizo commit de la carpeta `node_modules` en `dashboard-orus`.
+- **Corrección:** Se eliminó del historial de git con `git rm -r --cached` y se forzó un redespliegue de Vercel (Production) vía CLI que logró conectar exitosamente `DashboardView.jsx` a Supabase para leer la data en vivo.
+- **Error detectado 8:** El pipeline de Gemini crasheaba internamente (`Error crítico en pipeline: No module named 'googleapiclient'`) desde el contenedor de VPS, lo que se traducía en falta total de respuesta en WhatsApp.
+- **Corrección:** El archivo `requirements.txt` modificado con los módulos de Google Calendar no había sido subido a GitHub (fuente que usa EasyPanel). Se hizo commit y push del archivo `requirements.txt` y se re-desplegó exitosamente en EasyPanel.
