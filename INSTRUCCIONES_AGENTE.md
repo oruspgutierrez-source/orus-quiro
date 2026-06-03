@@ -26,6 +26,7 @@
 > - Modificar la pestaña "System Logs" en el Dashboard para consumir logs reales.
 > - Modificar "Inbox Chat" en el Dashboard para responder manualmente a los Handovers directamente desde la interfaz web.
 > - El usuario hará pruebas físicas enviando mensajes desde un celular alterno para verificar todo el flujo del Handover.
+> - **Migración de Infraestructura:** Mudar el alojamiento del Dashboard de Vercel directamente al VPS (EasyPanel) para tener Backend y Frontend centralizados en el mismo servidor (ej. `dashboard.orusquiroterapia.online`).
 
 ---
 
