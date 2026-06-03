@@ -10,6 +10,7 @@ Patrón: Sliding Window Cancel-and-Restart
 import asyncio
 import re
 import time
+import os
 from api.db.supabase_client import supabase
 from api.services.security import check_rate_limit, sanitize_input, log_security_event
 from api.services.gemini_client import generate_response
@@ -221,14 +222,16 @@ async def _process_buffer(sender_id: str, payload: dict):
 
         # ── 3. Firewall: verificar usuario ─────────────────────────────────────
         user_uuid = None
+        session_mode = 'AI'
         try:
-            user_check = supabase.table('orus_users').select('id, is_blocked').eq('phone_number', real_sender_id).execute()
+            user_check = supabase.table('orus_users').select('id, is_blocked, session_mode').eq('phone_number', real_sender_id).execute()
             if user_check.data:
                 user_data = user_check.data[0]
                 if user_data.get('is_blocked'):
                     print(f"[Processor] Usuario bloqueado: {real_sender_id}", flush=True)
                     return
                 user_uuid = user_data.get('id')
+                session_mode = user_data.get('session_mode') or 'AI'
             else:
                 new_user = supabase.table('orus_users').insert({'phone_number': real_sender_id}).execute()
                 user_uuid = new_user.data[0].get('id')
@@ -250,6 +253,64 @@ async def _process_buffer(sender_id: str, payload: dict):
         if is_threat:
             log_security_event('WARNING', threat_type, real_sender_id, f'Amenaza: {threat_type}', text_body)
             return
+
+        # ── 5.5. Máquina de Estados: Handover & Quejas ─────────────────────────
+        text_lower = cleaned_text.lower()
+        
+        async def escalate_to_human(reason=""):
+            if user_uuid:
+                supabase.table('orus_users').update({'session_mode': 'HUMAN', 'admin_notified': True}).eq('id', user_uuid).execute()
+            alert_msg = f"🚨 URGENTE: Atención requerida.\nUsuario: {real_sender_id}\nMotivo: {reason}\nÚltimo mensaje: {cleaned_text}"
+            await send_telegram_alert(alert_msg)
+            
+            admin_whatsapp = os.getenv("ADMIN_WHATSAPP_NUMBER")
+            if admin_whatsapp:
+                if not admin_whatsapp.endswith("@s.whatsapp.net"):
+                    admin_whatsapp += "@s.whatsapp.net"
+                try:
+                    await wa_client.send_message(to=admin_whatsapp, text=alert_msg)
+                except Exception as e:
+                    print(f"Error enviando alerta a WhatsApp Admin: {e}", flush=True)
+
+        if session_mode == 'HUMAN':
+            print(f"[Processor] Mensaje ignorado, el usuario {real_sender_id} está en modo HUMAN.", flush=True)
+            if user_uuid:
+                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+            return
+            
+        elif session_mode == 'CONFIRMING_HANDOVER':
+            if any(word in text_lower for word in ['sí', 'si', 'claro', 'por favor', 'ok', 'yes', 'confirm', 'quiero']):
+                await escalate_to_human("Confirmó transferencia a humano")
+                await wa_client.send_message(to=real_sender_id, text="Perfecto, te transferiré con un especialista. Un humano se pondrá en contacto contigo pronto por este mismo medio.")
+            elif any(word in text_lower for word in ['no', 'cancelar', 'nunca', 'falso']):
+                if user_uuid:
+                    supabase.table('orus_users').update({'session_mode': 'AI'}).eq('id', user_uuid).execute()
+                await wa_client.send_message(to=real_sender_id, text="Entiendo. Entonces, ¿cómo puedo ayudarte? Mi propósito es realizar el diagnóstico de tu hardware biológico mediante la Auditoría Biosemiótica y esto es lo que podemos hacer. ¿Deseas continuar con el proceso?")
+            else:
+                if user_uuid:
+                    supabase.table('orus_users').update({'session_mode': 'COMPLAINT_MODE'}).eq('id', user_uuid).execute()
+                await wa_client.send_message(to=real_sender_id, text="Por favor, dime detalladamente cuál es tu inconveniente o queja para poder ayudarte mejor.")
+            
+            if user_uuid:
+                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+            return
+
+        elif session_mode == 'COMPLAINT_MODE':
+            await escalate_to_human("Queja registrada")
+            await wa_client.send_message(to=real_sender_id, text="Tu incomodidad fue enviada y será evaluada por nuestro equipo. Se te enviará un mensaje cuando haya una respuesta. ¡Hasta pronto!")
+            if user_uuid:
+                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+            return
+
+        else:
+            handover_keywords = ['humano', 'asesor', 'persona', 'alguien', 'queja', 'estafa', 'fraude', 'no sirve', 'mal servicio', 'ayuda humana']
+            if any(kw in text_lower for kw in handover_keywords):
+                if user_uuid:
+                    supabase.table('orus_users').update({'session_mode': 'CONFIRMING_HANDOVER'}).eq('id', user_uuid).execute()
+                await wa_client.send_message(to=real_sender_id, text="He detectado que deseas hablar con un humano o reportar un inconveniente. ¿Deseas que te transfiera con un especialista humano para resolver esto? (Responde SÍ o NO)")
+                if user_uuid:
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                return
 
         # ── 6. LLM con Memoria ────────────────────────────────────────────────
         history_msgs = []

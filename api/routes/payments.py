@@ -157,7 +157,8 @@ async def process_successful_payment(session: dict):
                 f"1. DEBES presentarle directamente estos horarios al consultante de forma estructurada para agendar su primera sesión (el Mapeo).\n"
                 f"2. NO debes saludar, felicitar, agradecer ni hacer mención alguna al pago o la factura. El cliente ya vio y recibió el PDF de la factura, y tu pie de factura ya hizo la transición.\n"
                 f"3. Tu mensaje debe comenzar directamente con la propuesta clínica en el tono sobrio de El Escultor, ofreciendo estos días y horas específicos de forma limpia y directa.\n"
-                f"4. NO invoques ninguna herramienta como check_free_slots() ni book_appointment() en esta respuesta, ya que la información de disponibilidad ha sido precalculada e inyectada por el servidor. Simplemente presenta las opciones al usuario y espera su elección."
+                f"4. NO invoques ninguna herramienta como check_free_slots() ni book_appointment() en esta respuesta, ya que la información de disponibilidad ha sido precalculada e inyectada por el servidor. Simplemente presenta las opciones al usuario y espera su elección.\n"
+                f"5. CRÍTICO: Presenta TODAS las fechas y horarios disponibles juntos en UN SOLO BLOQUE de texto. NO dividas los días usando barras (|||). Las barras (|||) solo deben usarse si el mensaje en su totalidad es extremadamente largo, pero la lista de horarios COMPLETA debe ir en el mismo fragmento."
             )
 
             print(f"[Payments Webhook] Activando flujo de agendamiento proactivo para {jid}...", flush=True)

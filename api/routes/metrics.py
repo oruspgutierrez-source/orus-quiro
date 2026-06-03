@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from api.db.supabase_client import supabase
+from api.dependencies import verify_api_key
 
-router = APIRouter(prefix="/api/metrics", tags=["Metrics"])
+router = APIRouter(prefix="/api/metrics", tags=["Metrics"], dependencies=[Depends(verify_api_key)])
 
 @router.get("/bot_vs_human")
 def get_bot_vs_human_metrics():

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from api.db.supabase_client import supabase
 from api.services.wa_client import wa_client
 from api.services.security import clear_rate_limit, log_security_event
+from api.dependencies import verify_api_key
 
-router = APIRouter(prefix="/api/users", tags=["Dashboard"])
+router = APIRouter(prefix="/api/users", tags=["Dashboard"], dependencies=[Depends(verify_api_key)])
 
 class ManualMessage(BaseModel):
     message: str

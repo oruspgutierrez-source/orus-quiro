@@ -1,5 +1,6 @@
 import json
-from fastapi import APIRouter, Request, HTTPException
+import os
+from fastapi import APIRouter, Request, HTTPException, Query
 
 router = APIRouter()
 
@@ -10,7 +11,7 @@ _MAX_SEEN = 10000  # Evitar crecimiento infinito
 
 
 @router.post("/webhook")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, token: str = Query(None)):
     """
     Endpoint para recibir eventos de Evolution API.
     Retorna 200 OK inmediatamente.
@@ -18,6 +19,10 @@ async def receive_webhook(request: Request):
     El debounce se maneja en message_processor con asyncio.Task:
     cada mensaje cancela el timer anterior y pone uno nuevo.
     """
+    expected_token = os.getenv("API_SECRET_KEY")
+    if expected_token and token != expected_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         payload = await request.json()
     except Exception:

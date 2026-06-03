@@ -60,35 +60,46 @@ def get_free_slots_data(date_str: str) -> list[int]:
         print(f"[CALENDAR TOOL ERROR] Fallo al consultar disponibilidad para {date_str}: {e}", flush=True)
         return []
 
+HOUR_LABEL = {
+    8: "8am", 9: "9am", 10: "10am", 11: "11am",
+    14: "2pm", 15: "3pm", 16: "4pm", 17: "5pm"
+}
+MONTHS_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+             "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
 def format_availability_table(days: list[str], slots_per_day: dict[str, list[int]]) -> str:
-    """Formatea la disponibilidad como tabla AM/PM legible por el LLM y el consultante."""
-    lines = [
-        "DISPONIBILIDAD SEMANAL:",
-        "| Día       | AM (8-12h)           | PM (14-17h)         |",
-        "|-----------|----------------------|---------------------|"
-    ]
-    
+    """Formatea la disponibilidad en lenguaje natural humanizado para WhatsApp."""
     import datetime as dt
-    days_es = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-    
+
+    lines = ["Estos son los horarios disponibles para tu sesión de Mapeo:"]
+
     for day_str in days:
         try:
-            parsed_date = dt.datetime.strptime(day_str, "%Y-%m-%d")
-            day_name = days_es[parsed_date.weekday()]
-            date_short = f"{parsed_date.day}/{parsed_date.month}"
-            day_col = f"{day_name} {date_short}"
-        except:
-            day_col = day_str
-            
+            parsed = dt.datetime.strptime(day_str, "%Y-%m-%d")
+            day_name = DAYS_ES[parsed.weekday()]
+            day_num = parsed.day
+            month_name = MONTHS_ES[parsed.month - 1]
+            label = f"{day_name} {day_num} de {month_name}"
+        except Exception:
+            label = day_str
+
         slots = slots_per_day.get(day_str, [])
-        am_slots = [h for h in slots if h < 12]
-        pm_slots = [h for h in slots if h >= 12]
-        
-        am_str = " ".join([f"{h}:00" for h in am_slots])
-        pm_str = " ".join([f"{h}:00" for h in pm_slots])
-        
-        lines.append(f"| {day_col:<9} | {am_str:<20} | {pm_str:<19} |")
-        
+        am_slots = [HOUR_LABEL.get(h, f"{h}am") for h in slots if h < 12]
+        pm_slots = [HOUR_LABEL.get(h, f"{h}pm") for h in slots if h >= 12]
+
+        if not slots:
+            lines.append(f"\n{label}: sin disponibilidad")
+            continue
+
+        day_line = f"\n{label}:"
+        if am_slots:
+            day_line += f"\n  Mañana: {', '.join(am_slots)}"
+        if pm_slots:
+            day_line += f"\n  Tarde: {', '.join(pm_slots)}"
+        lines.append(day_line)
+
+    lines.append("\n¿Qué día y horario prefieres?")
     return "\n".join(lines)
 
 def check_free_slots(start_date: str, end_date: str) -> str:
@@ -205,9 +216,12 @@ async def send_visual_agenda_protocol(phone_number: str, name: str, date_time: s
 
     await asyncio.sleep(3.0)
 
+    # Extraer numero limpio
+    clean_phone = phone_number.split("@")[0] if "@" in phone_number else phone_number
+
     # 5. Mensaje final con el link a la Web App de datos biométricos
     biometric_message = (
-        "Finalmente, necesito tu material de trabajo. Ingresa a este enlace seguro https://ruta-del-escultor.vercel.app/ "
+        f"Finalmente, necesito tu material de trabajo. Ingresa a este enlace seguro https://ruta-del-escultor.vercel.app/?phone={clean_phone} "
         "para subir las fotografias de tus manos siguiendo estrictamente los parametros indicados. "
         "Este es tu hardware; asegurate de que la iluminacion sea perfecta para que Orus pueda decodificarlo "
         "con precision antes de nuestra sesion de Revelacion."

@@ -1,0 +1,15 @@
+# Registro de Backend
+
+## Fecha: 2026-06-01
+- **Error detectado:** El comando de arranque de Uvicorn vía `Start-Process` no lanzó errores visibles de inmediato, por lo que se reportó éxito de arranque falsamente. Sin embargo, el entorno no tenía las librerías instaladas (`uvicorn`, `fastapi`, etc.), lo que impidió que el servidor levantara internamente causando que el bot no respondiera los mensajes.
+- **Corrección:** Se ejecutó `pip install -r requirements.txt` para instalar todas las dependencias necesarias. Una vez finalizado el proceso de instalación con código de salida 0, se volvió a lanzar `uvicorn main:app` asegurando que el servidor esté verdaderamente operativo escuchando en el puerto 8000.
+- **Error detectado 2:** ngrok no estaba iniciando debido a la falta de un Authtoken en este equipo, arrojando el error `ERR_NGROK_4018` al intentar usar el dominio estático `annually-murmuring-reuse.ngrok-free.dev`. Como el proceso se lanzaba en segundo plano (`Start-Process`), el error era invisible.
+- **Corrección requerida:** El usuario necesita ejecutar `.\ngrok config add-authtoken <TOKEN>` en esta máquina para que el túnel pueda establecerse y enlazar con el webhook de Evolution API.
+- **Error detectado 3:** El dominio estático `annually-murmuring-reuse.ngrok-free.dev` está reservado por otra cuenta de ngrok, impidiendo iniciar el túnel para el usuario actual.
+- **Corrección:** Se configuró el Authtoken provisto por el usuario y se levantó ngrok usando una URL dinámica aleatoria. Se ejecutó `register_webhook.py` para sincronizar automáticamente el nuevo endpoint con Evolution API de forma exitosa.
+- **Error detectado 4:** Gemini devolvía `[SILENT_FALLBACK]` ocasionalmente tras ejecutar un tool, porque el detector escaneaba `contents` en busca del tool, pero el historial de Gemini ya lo había limpiado.
+- **Corrección:** En `gemini_client.py`, se implementó un tracker explícito `last_executed_tool` que se registra *antes* de ejecutar cualquier herramienta, asegurando que el detector de fallbacks siempre tenga el estado correcto.
+- **Error detectado 5:** En la fase de agendamiento (Fase 4), el bot intentaba pedir los datos (nombre/email) y al mismo tiempo mostrar el resumen ("¿Son correctos?") en un solo mensaje.
+- **Corrección:** Se dividió la Fase 4 del System Prompt en tres pasos estrictamente secuenciales (Paso 1: pedir datos y esperar, Paso 2: mostrar resumen y esperar, Paso 3: agendar) usando la instrucción imperativa `ESPERA SU RESPUESTA`.
+- **Error detectado 6:** El webhook reactivo pasivo `pg_net` de Supabase (Spec 16) no enviaba el mensaje de WhatsApp a pesar de que la App React cargaba las fotos. Se diagnosticó que la App React guardaba un ID genérico (`usuario_web_...`) en lugar del número de WhatsApp en la tabla `evaluaciones_completas`.
+- **Corrección:** Se modificó `calendar_client.py` para enviar la URL de Vercel concatenada con el parámetro `?phone={clean_phone}`, permitiéndole al Frontend de React capturar el teléfono real y guardarlo en la columna `wa_id` de Supabase.
