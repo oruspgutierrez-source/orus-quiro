@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Cargar variables de entorno antes de importar modulos que dependan de ellas
 load_dotenv()
 
-from api.routes import webhooks, health, llm_test, dashboard, metrics, payments
+from api.routes import webhooks, health, llm_test, dashboard, metrics, payments, logs
 
 app = FastAPI(
     title="Orus Quiro API",
@@ -57,6 +57,7 @@ app.include_router(llm_test.router)
 app.include_router(dashboard.router)
 app.include_router(metrics.router)
 app.include_router(payments.router)
+app.include_router(logs.router)
 
 @app.get("/")
 def root():

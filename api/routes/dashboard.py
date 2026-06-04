@@ -30,12 +30,42 @@ def get_user_history(user_id: str):
 
 @router.post("/{user_id}/resolve")
 def resolve_human_session(user_id: str):
-    """Cambia el session_mode de vuelta a 'AI' y admin_notified a False."""
+    """Cambia el session_mode de vuelta a 'AI' y admin_notified a False, y marca la intervención como resuelta."""
     try:
         response = supabase.table('orus_users').update({
             'session_mode': 'AI',
             'admin_notified': False
         }).eq('id', user_id).execute()
+        
+        # Actualizar el registro en orus_agent_interventions
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).isoformat()
+        supabase.table('orus_agent_interventions').update({
+            'resolved_at': now_str,
+            'resolved_by': 'admin'
+        }).eq('user_id', user_id).is_('resolved_at', 'null').execute()
+
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class InterventionRequest(BaseModel):
+    reason: str
+
+@router.post("/{user_id}/interventions/request")
+def request_intervention(user_id: str, payload: InterventionRequest):
+    """Registra una solicitud de intervención humana."""
+    try:
+        response = supabase.table('orus_agent_interventions').insert({
+            'user_id': user_id,
+            'reason': payload.reason
+        }).execute()
+
+        supabase.table('orus_users').update({
+            'session_mode': 'HUMAN',
+            'admin_notified': False
+        }).eq('id', user_id).execute()
+
         return {"status": "success", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
