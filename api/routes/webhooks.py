@@ -19,7 +19,7 @@ async def receive_webhook(request: Request, token: str = Query(None)):
     El debounce se maneja en message_processor con asyncio.Task:
     cada mensaje cancela el timer anterior y pone uno nuevo.
     """
-    expected_token = os.getenv("API_SECRET_KEY")
+    expected_token = os.getenv("EVOLUTION_WEBHOOK_SECRET")
     if expected_token and token != expected_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
