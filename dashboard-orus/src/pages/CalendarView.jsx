@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, StickyNote, Save, Loader2, Calendar as CalIcon, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, StickyNote, Save, Loader2, Calendar as CalIcon, Trash2, Edit2 } from 'lucide-react';
 
 const glassCard = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
 const darkCard  = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-black border border-zinc-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
@@ -26,6 +26,7 @@ export default function CalendarView() {
   const [noteContent, setNoteContent] = useState('');
   const [expandedEventId, setExpandedEventId] = useState(null);
   const [eventColors, setEventColors] = useState({});
+  const [expandedNoteId, setExpandedNoteId] = useState(null);
 
   // Fetch Events from Google Calendar
   useEffect(() => {
@@ -402,9 +403,8 @@ export default function CalendarView() {
               <p className="text-xs text-zinc-500 text-center mt-10">Sin notas registradas.</p>
             ) : (
               notes.map((note) => (
-                <div key={note.id} className="bg-black/40 border border-zinc-700/50 rounded-xl p-3 hover:border-emerald-500/30 transition-colors group cursor-pointer" onClick={() => {
-                  setActiveNoteEvent({ id: note.event_id, title: note.client_name });
-                  setNoteContent(note.note_content);
+                <div key={note.id} className="bg-black/40 border border-zinc-700/50 rounded-xl p-3 hover:border-emerald-500/30 transition-all group cursor-pointer" onClick={() => {
+                  setExpandedNoteId(expandedNoteId === note.id ? null : note.id);
                 }}>
                   <div className="flex items-start justify-between mb-2">
                     <div className="text-xs flex flex-col gap-0.5 pr-2">
@@ -414,15 +414,28 @@ export default function CalendarView() {
                         </span>
                       ))}
                     </div>
-                    <button 
-                      onClick={(e) => handleDeleteNote(note.id, e)}
-                      className="text-zinc-600 hover:text-rose-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Eliminar Nota"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveNoteEvent({ id: note.event_id, title: note.client_name });
+                          setNoteContent(note.note_content);
+                        }}
+                        className="text-zinc-600 hover:text-emerald-400 p-1 transition-colors"
+                        title="Editar Nota"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteNote(note.id, e)}
+                        className="text-zinc-600 hover:text-rose-500 p-1 transition-colors"
+                        title="Eliminar Nota"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed border-t border-zinc-800/50 pt-2">{note.note_content}</p>
+                  <p className={`text-xs text-zinc-400 leading-relaxed border-t border-zinc-800/50 pt-2 ${expandedNoteId === note.id ? '' : 'line-clamp-3'}`}>{note.note_content}</p>
                 </div>
               ))
             )}
