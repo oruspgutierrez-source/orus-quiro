@@ -284,11 +284,12 @@ export default function CalendarView() {
                   className={`absolute mx-1 border rounded-xl p-2 transition-all cursor-pointer ${c.bg} backdrop-blur-sm flex flex-col justify-start group ${transformOrigin} ${isExpanded ? 'z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] scale-110' : 'z-20 hover:scale-[1.01]'}`}
                   style={{
                     left: `calc(60px + ((100% - 60px) / 7) * ${ev.col})`,
-                    width: isExpanded ? '200px' : `calc(((100% - 60px) / 7) - 8px)`,
-                    top: `${ev.top}px`,
+                    width: isExpanded ? '300px' : `calc(((100% - 60px) / 7) - 8px)`,
+                    top: isExpanded ? `calc(${ev.top}px - 10px)` : `${ev.top}px`,
                     height: isExpanded ? 'max-content' : `${finalH}px`,
-                    minHeight: `${finalH}px`,
-                    overflow: isExpanded ? 'visible' : 'hidden'
+                    minHeight: isExpanded ? '120px' : `${finalH}px`,
+                    overflow: isExpanded ? 'visible' : 'hidden',
+                    boxShadow: isExpanded ? '0 25px 50px -12px rgba(0, 0, 0, 0.75)' : ''
                   }}
                 >
                   <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${c.bar}`} />
@@ -297,7 +298,7 @@ export default function CalendarView() {
                   <div className="pl-3 relative z-10 flex justify-between items-start mb-2">
                     <div className="flex-1 pr-2">
                       <p className={`text-[10px] font-bold ${c.label} mb-0.5`}>{ev.time}</p>
-                      <p className={`text-xs font-bold ${c.text} leading-tight transition-all ${isExpanded ? '' : 'truncate'}`} style={isExpanded ? { wordBreak: 'break-word' } : {}}>{ev.title}</p>
+                      <p className={`font-bold ${c.text} leading-tight transition-all ${isExpanded ? 'text-sm mt-1' : 'text-xs truncate'}`} style={isExpanded ? { wordBreak: 'break-word' } : {}}>{ev.title}</p>
                     </div>
                     {/* Botón para Añadir Nota */}
                     <button 
