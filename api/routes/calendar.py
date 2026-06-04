@@ -88,3 +88,12 @@ def get_notes():
     except Exception as e:
         print(f"Error fetching notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/notes/{note_id}")
+def delete_note(note_id: str):
+    try:
+        response = supabase.table('orus_session_notes').delete().eq('id', note_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print(f"Error deleting note: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

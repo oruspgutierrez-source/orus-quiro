@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, StickyNote, Save, Loader2, Calendar as CalIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, StickyNote, Save, Loader2, Calendar as CalIcon, Trash2 } from 'lucide-react';
 
 const glassCard = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
 const darkCard  = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-black border border-zinc-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
@@ -170,6 +170,28 @@ export default function CalendarView() {
     }
   };
 
+  const handleDeleteNote = async (noteId, e) => {
+    e.stopPropagation();
+    if (!confirm("¿Seguro que deseas eliminar esta nota?")) return;
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
+      const API_KEY = import.meta.env.VITE_API_KEY || 'OrusDashboardAdmin2026';
+      
+      const res = await fetch(`${API_URL}/api/calendar/notes/${noteId}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': API_KEY }
+      });
+      if (res.ok) {
+        setNotes(notes.filter(n => n.id !== noteId));
+      } else {
+        alert("Error al eliminar nota");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error de conexión");
+    }
+  };
+
   // Setup current week dates
   const todayDate = new Date();
   const currentDates = days.map((_, i) => {
@@ -241,20 +263,24 @@ export default function CalendarView() {
             {events.map((ev, i) => {
               const currentColor = eventColors[ev.id] || ev.color;
               const c = colorMap[currentColor] || colorMap.emerald;
-              const leftPct = (ev.col / 7) * 100;
+              // Ajustar left y width basándonos en (100% - 60px) / 7
+              const isExpanded = expandedEventId === ev.id;
+              
               // Ajustar altura si se sale del contenedor
               const finalH = ev.top + ev.h > 800 ? 800 - ev.top : ev.h;
               if(ev.top > 800 || ev.top < 0) return null; // Fuera del rango de 8am a 8pm
-              const isExpanded = expandedEventId === ev.id;
+
+              // Si está en las últimas dos columnas y se expande, podríamos querer que flote hacia la izquierda para que no se salga de la pantalla.
+              const transformOrigin = ev.col > 4 ? 'origin-top-right' : 'origin-top-left';
 
               return (
                 <div
                   key={ev.id || i}
                   onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
-                  className={`absolute mx-1 border rounded-xl p-2 transition-all cursor-pointer ${c.bg} backdrop-blur-sm flex flex-col justify-start group ${isExpanded ? 'z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] scale-[1.03]' : 'z-20 hover:scale-[1.01]'}`}
+                  className={`absolute mx-1 border rounded-xl p-2 transition-all cursor-pointer ${c.bg} backdrop-blur-sm flex flex-col justify-start group ${transformOrigin} ${isExpanded ? 'z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] scale-110' : 'z-20 hover:scale-[1.01]'}`}
                   style={{
-                    left: `calc(60px + ${leftPct}%)`,
-                    width: `calc(${100/7}% - 8px)`,
+                    left: `calc(60px + ((100% - 60px) / 7) * ${ev.col})`,
+                    width: isExpanded ? '200px' : `calc(((100% - 60px) / 7) - 8px)`,
                     top: `${ev.top}px`,
                     height: isExpanded ? 'max-content' : `${finalH}px`,
                     minHeight: `${finalH}px`,
@@ -378,10 +404,22 @@ export default function CalendarView() {
                   setNoteContent(note.note_content);
                 }}>
                   <div className="flex items-start justify-between mb-2">
-                    <p className="text-xs font-bold text-zinc-300 truncate pr-2">{note.client_name}</p>
-                    <span className="text-[9px] text-zinc-500 whitespace-nowrap">{new Date(note.created_at).toLocaleDateString()}</span>
+                    <div className="text-xs flex flex-col gap-0.5 pr-2">
+                      {note.client_name.split(' - ').map((part, idx) => (
+                        <span key={idx} className={idx === 0 ? "font-bold text-zinc-200" : idx === 1 ? "text-zinc-400 font-medium" : "text-emerald-400 text-[10px]"}>
+                          {part}
+                        </span>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={(e) => handleDeleteNote(note.id, e)}
+                      className="text-zinc-600 hover:text-rose-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Eliminar Nota"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{note.note_content}</p>
+                  <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed border-t border-zinc-800/50 pt-2">{note.note_content}</p>
                 </div>
               ))
             )}
