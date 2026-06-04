@@ -148,9 +148,12 @@ export default function CalendarView() {
       });
 
       if (res.ok) {
-        // Optimistic UI update
+        const responseData = await res.json();
+        const realId = (responseData.data && responseData.data.length > 0) ? responseData.data[0].id : ('temp_' + Date.now());
+
+        // UI update with real ID
         const newNote = {
-          id: 'temp_' + Date.now(),
+          id: realId,
           event_id: activeNoteEvent.id,
           client_name: finalClientName,
           note_content: noteContent,
