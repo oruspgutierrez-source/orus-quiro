@@ -27,3 +27,6 @@ __pycache__/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+api/google_credentials.json
+
