@@ -30,6 +30,7 @@ Debe ser actualizado cada vez que se agreguen nuevos servicios, se cambien varia
   - `ADMIN_WHATSAPP_NUMBER=15556348064`
   - `VPS_DOMAIN_URL=https://api.orusquiroterapia.online`
   - `API_SECRET_KEY=OrusDashboardAdmin2026`
+  - `GOOGLE_CREDENTIALS_JSON={ ... }` *(Contenido del archivo JSON de la Service Account en una sola línea)*
 
 ### 1.2 `orus-dashboard`
 - **Tipo**: Aplicación (Node.js/Vite/React)
@@ -77,8 +78,9 @@ Debe ser actualizado cada vez que se agreguen nuevos servicios, se cambien varia
 - **Tablas principales**:
   - `orus_users` (Directorio de clientes de WA)
   - `orus_messages` (Historial de chat en tiempo real)
-  - `orus_logs` (Telemetría de errores del backend)
+  - `orus_logs` / `orus_system_logs` (Telemetría y errores de infraestructura con interfaz de estado 'resolved')
   - `orus_agent_interventions` (Registro de handovers)
+  - `orus_session_notes` (Bitácora Clínica vinculada a eventos de Google Calendar)
 
 ## 3. Comandos Frecuentes
 Para forzar actualizaciones en la VPS mediante EasyPanel:
