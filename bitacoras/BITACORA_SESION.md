@@ -5,19 +5,19 @@
 
 ---
 
-## 🛠️ Trabajo Realizado (Sesión Actual — Spec 26: Migración VPS Dashboard)
+## 🛠️ Trabajo Realizado (Sesión Actual — Dashboard UI & Notas)
 
-### 1. Dockerización del Frontend
-- Se creó `Dockerfile` multi-stage (Node.js + Nginx) en `dashboard-orus/`.
-- Se configuró Nginx (`nginx.conf`) para enrutamiento SPA (Single Page Application) con `try_files`.
+### 1. Correcciones en Gestión de Notas Clínicas
+- **Fix de Eliminación Inmediata:** Modificado `CalendarView.jsx` para recuperar y asignar el UUID real de la base de datos de Supabase en el estado local tras la creación optimista, resolviendo el error `404` al intentar borrar notas recién creadas.
+- **Mejora UX en Lectura:** Implementado un Modal Flotante (Pop-Up oscuro centrado) con scroll propio que se activa al hacer clic en una nota de la barra lateral, eliminando la interrupción de abrir el panel de edición involuntariamente.
+- **Acceso a Edición:** Botón específico de "Editar Contenido" añadido de forma exclusiva tanto en estado hover (lista lateral) como dentro del Modal.
 
-### 2. Actualización de Infraestructura
-- Se integró el servicio `dashboard` en el `docker-compose.yml` raíz.
-- Se configuró el puerto 3000 interno y se preparó para despliegue automático en EasyPanel.
+### 2. Estilos del Calendario
+- **Unificación Visual de Citas:** El texto (títulos y horas) de las tarjetas de eventos en la grilla del calendario ha sido estandarizado en color blanco puro, independientemente del código de color dinámico asignado al contenedor para mejorar contraste.
 
 ---
 
-## 🛠️ Trabajo Realizado (Sesión 2026-05-28 — Spec 23: Homologación Conversacional y Blindaje)
+## 🛠️ Trabajo Realizado (Sesión Anterior — Spec 26: Migración VPS Dashboard)
 
 ### 1. Inicialización y Arranque de Servidores (Segundo Plano)
 * **Backend Uvicorn:** Reactivado en el puerto `8000` con recarga automática activa (`--reload`).

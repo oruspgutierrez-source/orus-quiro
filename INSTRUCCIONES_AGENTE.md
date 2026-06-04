@@ -7,7 +7,8 @@
 > **Skill Activo:** `ultra-concise-chat`
 > Antes de generar CUALQUIER respuesta en el chat, lee y aplica este protocolo estrictamente:
 > - Si la informacion ya fue guardada en un artefacto o `.md` -> **NO la repitas en el chat.**
-> - Task completada -> solo escribe: *"Task #X completada con exito."*
+> - Task completada -> solo escribe: *"Task #X completada con exito."* o *"Ya complete la tarea. OK."*
+> - Si el usuario pide un ajuste -> NO repitas lo que pidió ni le expliques el proceso. Solo di que está completado, EXCEPTO si tomaste una decisión técnica extra que necesite saber.
 > - Error encontrado -> solo escribe: *"Error registrado con su correccion en [archivo]."*
 > - **Cero texto de relleno. Cero explicaciones de proceso. Solo el resultado.**
 

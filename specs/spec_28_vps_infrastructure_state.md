@@ -80,7 +80,7 @@ Debe ser actualizado cada vez que se agreguen nuevos servicios, se cambien varia
   - `orus_messages` (Historial de chat en tiempo real)
   - `orus_logs` / `orus_system_logs` (Telemetría y errores de infraestructura con interfaz de estado 'resolved')
   - `orus_agent_interventions` (Registro de handovers)
-  - `orus_session_notes` (Bitácora Clínica vinculada a eventos de Google Calendar)
+  - `orus_session_notes` (Bitácora Clínica vinculada a eventos de Google Calendar. Implementa UI con modal flotante para lectura y soporte de borrado con UUID real.)
 
 ## 3. Comandos Frecuentes
 Para forzar actualizaciones en la VPS mediante EasyPanel:
