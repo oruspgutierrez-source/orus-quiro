@@ -67,3 +67,12 @@ Código / Stack trace:
     except Exception as e:
         print(f"Error analizando log con IA: {e}")
         raise HTTPException(status_code=500, detail="Error al conectar con la IA de análisis.")
+
+@router.delete("/{log_id}")
+def delete_log(log_id: str):
+    try:
+        response = supabase.table('orus_logs').delete().eq('id', log_id).execute()
+        return {"status": "success", "message": "Log eliminado/resuelto."}
+    except Exception as e:
+        print(f"Error eliminando log: {e}")
+        raise HTTPException(status_code=500, detail="Error al eliminar el registro.")

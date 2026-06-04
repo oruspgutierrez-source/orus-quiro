@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, ChevronLeft, ChevronRight, Loader2, Bot, Copy, Check } from 'lucide-react';
+import { Filter, ChevronLeft, ChevronRight, Loader2, Bot, Copy, Check, CheckCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const glassCard = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
@@ -20,6 +20,7 @@ export default function SystemLogsView() {
   
   // States for the AI Analysis and UX actions
   const [analyzingLogIds, setAnalyzingLogIds] = useState(new Set());
+  const [deletingLogIds, setDeletingLogIds] = useState(new Set());
   const [aiAnalysis, setAiAnalysis] = useState({});
   const [copiedLogId, setCopiedLogId] = useState(null);
 
@@ -61,6 +62,40 @@ export default function SystemLogsView() {
     navigator.clipboard.writeText(text);
     setCopiedLogId(id);
     setTimeout(() => setCopiedLogId(null), 2000);
+  };
+
+  const handleResolve = async (id) => {
+    setDeletingLogIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(id);
+      return newSet;
+    });
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
+      
+      const response = await fetch(`${API_URL}/api/logs/${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Optimistically remove from state
+        setLogs(prevLogs => prevLogs.filter(log => log.id !== id));
+        setTotalCount(prevCount => Math.max(0, prevCount - 1));
+      } else {
+        const data = await response.json();
+        alert("Error al resolver: " + (data.detail || "Error desconocido"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error de conexión al resolver el log.");
+    } finally {
+      setDeletingLogIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
   };
 
   const handleAnalyze = async (log) => {
@@ -115,8 +150,8 @@ export default function SystemLogsView() {
       <div className={`${glassCard} p-5 flex justify-between items-center relative z-10`}>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent pointer-events-none" />
         <div className="relative z-10">
-          <h2 className="text-xl font-bold text-slate-100 tracking-wide">Registros del Sistema</h2>
-          <p className="text-sm text-slate-400 mt-1 font-medium">Monitorea y analiza eventos del sistema en tiempo real.</p>
+          <h2 className="text-xl font-bold text-slate-100 tracking-wide">Operaciones y Alertas</h2>
+          <p className="text-sm text-slate-400 mt-1 font-medium">Monitorea fallos, analízalos y dales por concluidos para mantener tu tablero limpio.</p>
         </div>
         <div className="flex gap-3 relative z-10">
           <select 
@@ -157,13 +192,15 @@ export default function SystemLogsView() {
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="p-8 text-center text-zinc-500 font-medium">No se encontraron registros.</td>
+                  <td colSpan="4" className="p-8 text-center text-zinc-500 font-medium">Todos los sistemas operativos. No hay alertas pendientes.</td>
                 </tr>
               ) : (
                 logs.map((log) => {
                   const cfg = severityConfig[log.severity] || severityConfig['INFO'];
+                  const isDeleting = deletingLogIds.has(log.id);
+                  
                   return (
-                    <tr key={log.id} className="border-b border-zinc-800/50 hover:bg-white/[0.03] transition-colors group">
+                    <tr key={log.id} className={`border-b border-zinc-800/50 hover:bg-white/[0.03] transition-all group ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
                       <td className="p-4 text-zinc-500 text-sm font-mono whitespace-nowrap align-top">
                         {new Date(log.created_at).toLocaleString()}
                       </td>
@@ -198,16 +235,15 @@ export default function SystemLogsView() {
                           </div>
                           
                           {/* Actions (Visible on Hover) */}
-                          <div className="flex flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                             {log.severity === 'ERROR' && !aiAnalysis[log.id] && (
                               <button
                                 onClick={() => handleAnalyze(log)}
                                 disabled={analyzingLogIds.has(log.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-xs font-medium transition-all disabled:opacity-50"
+                                className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white transition-all disabled:opacity-50"
                                 title="Analizar con IA"
                               >
                                 {analyzingLogIds.has(log.id) ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-                                Analizar
                               </button>
                             )}
                             
@@ -217,6 +253,15 @@ export default function SystemLogsView() {
                               title="Copiar Detalles"
                             >
                               {copiedLogId === log.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                            </button>
+                            
+                            {/* Resolve / Concluir Button */}
+                            <button
+                              onClick={() => handleResolve(log.id)}
+                              className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 hover:text-emerald-300 transition-all"
+                              title="Marcar como Concluido (Eliminar)"
+                            >
+                              {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
                             </button>
                           </div>
                         </div>
