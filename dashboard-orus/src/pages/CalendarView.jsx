@@ -11,6 +11,7 @@ const colorMap = {
   emerald: { bg: 'bg-emerald-900/40 border-emerald-500/40', bar: 'bg-emerald-400', text: 'text-emerald-300', label: 'text-emerald-400' },
   amber:   { bg: 'bg-amber-900/30 border-amber-500/30',     bar: 'bg-amber-400',   text: 'text-amber-200',   label: 'text-amber-400' },
   slate:   { bg: 'bg-slate-700/40 border-slate-500/30',     bar: 'bg-slate-400',   text: 'text-slate-200',   label: 'text-slate-400' },
+  rose:    { bg: 'bg-rose-900/40 border-rose-500/40',       bar: 'bg-rose-400',    text: 'text-rose-300',    label: 'text-rose-400' },
 };
 
 export default function CalendarView() {
@@ -23,6 +24,8 @@ export default function CalendarView() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [activeNoteEvent, setActiveNoteEvent] = useState(null);
   const [noteContent, setNoteContent] = useState('');
+  const [expandedEventId, setExpandedEventId] = useState(null);
+  const [eventColors, setEventColors] = useState({});
 
   // Fetch Events from Google Calendar
   useEffect(() => {
@@ -124,9 +127,14 @@ export default function CalendarView() {
       const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
       const API_KEY = import.meta.env.VITE_API_KEY || 'OrusDashboardAdmin2026';
       
+      const eventDateStr = activeNoteEvent.rawStart ? new Date(activeNoteEvent.rawStart).toLocaleDateString() : new Date().toLocaleDateString();
+      const finalClientName = (eventDateStr && !activeNoteEvent.title.includes(eventDateStr))
+        ? `${activeNoteEvent.title} - ${eventDateStr}`
+        : activeNoteEvent.title;
+
       const payload = {
         event_id: activeNoteEvent.id,
-        client_name: activeNoteEvent.title,
+        client_name: finalClientName,
         note_content: noteContent
       };
 
@@ -144,7 +152,7 @@ export default function CalendarView() {
         const newNote = {
           id: 'temp_' + Date.now(),
           event_id: activeNoteEvent.id,
-          client_name: activeNoteEvent.title,
+          client_name: finalClientName,
           note_content: noteContent,
           created_at: new Date().toISOString()
         };
@@ -231,45 +239,60 @@ export default function CalendarView() {
             
             {/* Events */}
             {events.map((ev, i) => {
-              const c = colorMap[ev.color];
+              const currentColor = eventColors[ev.id] || ev.color;
+              const c = colorMap[currentColor] || colorMap.emerald;
               const leftPct = (ev.col / 7) * 100;
               // Ajustar altura si se sale del contenedor
               const finalH = ev.top + ev.h > 800 ? 800 - ev.top : ev.h;
               if(ev.top > 800 || ev.top < 0) return null; // Fuera del rango de 8am a 8pm
+              const isExpanded = expandedEventId === ev.id;
 
               return (
                 <div
                   key={ev.id || i}
-                  className={`absolute mx-1 border rounded-xl p-2 transition-all hover:scale-[1.01] ${c.bg} backdrop-blur-sm flex flex-col justify-between group z-20`}
+                  onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
+                  className={`absolute mx-1 border rounded-xl p-2 transition-all cursor-pointer ${c.bg} backdrop-blur-sm flex flex-col justify-start group ${isExpanded ? 'z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] scale-[1.03]' : 'z-20 hover:scale-[1.01]'}`}
                   style={{
                     left: `calc(60px + ${leftPct}%)`,
                     width: `calc(${100/7}% - 8px)`,
                     top: `${ev.top}px`,
-                    height: `${finalH}px`,
+                    height: isExpanded ? 'max-content' : `${finalH}px`,
+                    minHeight: `${finalH}px`,
+                    overflow: isExpanded ? 'visible' : 'hidden'
                   }}
                 >
                   <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${c.bar}`} />
                   <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent rounded-xl pointer-events-none" />
                   
-                  <div className="pl-3 relative z-10 flex justify-between items-start">
-                    <div>
+                  <div className="pl-3 relative z-10 flex justify-between items-start mb-2">
+                    <div className="flex-1 pr-2">
                       <p className={`text-[10px] font-bold ${c.label} mb-0.5`}>{ev.time}</p>
-                      <p className={`text-xs font-bold ${c.text} leading-tight group-hover:brightness-125 transition-all truncate pr-2`}>{ev.title}</p>
+                      <p className={`text-xs font-bold ${c.text} leading-tight transition-all ${isExpanded ? '' : 'truncate'}`} style={isExpanded ? { wordBreak: 'break-word' } : {}}>{ev.title}</p>
                     </div>
                     {/* Botón para Añadir Nota */}
                     <button 
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setActiveNoteEvent(ev);
                         // Buscar si ya existe una nota para pre-llenarla
                         const existingNote = notes.find(n => n.event_id === ev.id);
                         setNoteContent(existingNote ? existingNote.note_content : '');
                       }}
-                      className="w-6 h-6 rounded-md bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={`w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-opacity flex-shrink-0 ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       title="Agregar/Ver Nota Clínica"
                     >
                       <Plus size={14} />
                     </button>
                   </div>
+
+                  {isExpanded && (
+                    <div className="pl-3 mt-auto pt-3 border-t border-white/10 flex gap-2 relative z-10">
+                       <button onClick={(e) => { e.stopPropagation(); setEventColors({...eventColors, [ev.id]: 'emerald'}); }} className="w-5 h-5 rounded-full bg-emerald-500 hover:ring-2 ring-offset-1 ring-offset-transparent ring-emerald-300 transition-all shadow-sm" title="Confirmado (Verde)" />
+                       <button onClick={(e) => { e.stopPropagation(); setEventColors({...eventColors, [ev.id]: 'amber'}); }} className="w-5 h-5 rounded-full bg-amber-500 hover:ring-2 ring-offset-1 ring-offset-transparent ring-amber-300 transition-all shadow-sm" title="Pendiente (Amarillo)" />
+                       <button onClick={(e) => { e.stopPropagation(); setEventColors({...eventColors, [ev.id]: 'slate'}); }} className="w-5 h-5 rounded-full bg-slate-500 hover:ring-2 ring-offset-1 ring-offset-transparent ring-slate-300 transition-all shadow-sm" title="Finalizado (Gris)" />
+                       <button onClick={(e) => { e.stopPropagation(); setEventColors({...eventColors, [ev.id]: 'rose'}); }} className="w-5 h-5 rounded-full bg-rose-500 hover:ring-2 ring-offset-1 ring-offset-transparent ring-rose-300 transition-all shadow-sm" title="Cancelado (Rojo)" />
+                    </div>
+                  )}
                 </div>
               );
             })}
