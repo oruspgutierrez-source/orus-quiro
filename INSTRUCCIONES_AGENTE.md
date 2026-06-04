@@ -16,17 +16,16 @@
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Último Estado (2026-06-03 - Tarde):** Implementación en Producción y Vercel (Spec 25).
-> - Se desplegó el backend en EasyPanel VPS usando `api.orusquiroterapia.online`.
-> - Se desplegó el dashboard en Vercel (`dashboard-orus.vercel.app`) conectado en vivo a Supabase.
-> - Se configuró la variable `ADMIN_WHATSAPP_NUMBER` al número de la API de Meta para las alertas de Handover.
-> - El problema de `googleapiclient` fue solucionado haciendo push del `requirements.txt` actualizado.
+> **Último Estado (2026-06-04 - Tarde):** Integración de Datos Dinámicos y Hardening VPS (Spec 27).
+> - La pestaña "System Logs" ahora consume los logs reales de Supabase (`orus_system_logs`) con una UI glass-minimalista. Se añadió funcionalidad de marcarlos como resueltos.
+> - Se integró **Google Calendar** en el Dashboard mediante una credencial en variable de entorno (`GOOGLE_CREDENTIALS_JSON`) permitiendo ver las próximas citas reales.
+> - Se implementó un panel de **Notas de Sesión (Bitácora Clínica)** vinculado a los eventos del calendario que se guardan en la tabla `orus_session_notes`.
+> - Se reforzó la arquitectura de despliegue en **EasyPanel**, confirmando que todo el backend y frontend operan desde GitHub y usan variables de entorno.
 >
 > **Pendientes próxima sesión:**
-> - Modificar la pestaña "System Logs" en el Dashboard para consumir logs reales.
 > - Modificar "Inbox Chat" en el Dashboard para responder manualmente a los Handovers directamente desde la interfaz web.
 > - El usuario hará pruebas físicas enviando mensajes desde un celular alterno para verificar todo el flujo del Handover.
-> - **Migración de Infraestructura:** Mudar el alojamiento del Dashboard de Vercel directamente al VPS (EasyPanel) para tener Backend y Frontend centralizados en el mismo servidor (ej. `dashboard.orusquiroterapia.online`).
+> - Seguir afinando y optimizando el entorno VPS.
 
 ---
 
