@@ -26,7 +26,7 @@ export default function InboxChatView() {
         .from('orus_users')
         .select('*')
         .order('session_mode', { ascending: false }) // 'HUMAN' > 'AI' (alfabeticamente, H va antes que A) wait, H comes after A. Let's just order by updated_at
-        .order('updated_at', { ascending: false })
+        .order('last_interaction', { ascending: false })
         .limit(20);
       
       if (data) setActiveUsers(data);
