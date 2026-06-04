@@ -22,24 +22,31 @@ export default function SystemLogsView() {
   useEffect(() => {
     async function fetchLogs() {
       setLoading(true);
-      const startIdx = (page - 1) * limit;
-      const endIdx = startIdx + limit - 1;
+      try {
+        const startIdx = (page - 1) * limit;
+        const endIdx = startIdx + limit - 1;
 
-      let query = supabase.table('orus_logs').select('*', { count: 'exact' });
-      
-      if (severityFilter !== 'Todas las Severidades') {
-        query = query.eq('severity', severityFilter.toUpperCase());
-      }
-      
-      const { data, error, count } = await query
-        .order('created_at', { ascending: false })
-        .range(startIdx, endIdx);
+        let query = supabase.from('orus_logs').select('*', { count: 'exact' });
+        
+        if (severityFilter !== 'Todas las Severidades') {
+          query = query.eq('severity', severityFilter.toUpperCase());
+        }
+        
+        const { data, error, count } = await query
+          .order('created_at', { ascending: false })
+          .range(startIdx, endIdx);
 
-      if (!error && data) {
-        setLogs(data);
-        setTotalCount(count || 0);
+        if (!error && data) {
+          setLogs(data);
+          setTotalCount(count || 0);
+        } else if (error) {
+          console.error("Supabase Error:", error);
+        }
+      } catch (err) {
+        console.error("Javascript Error fetching logs:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchLogs();
   }, [page, severityFilter]);
