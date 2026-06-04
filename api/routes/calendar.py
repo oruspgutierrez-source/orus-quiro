@@ -13,13 +13,23 @@ CALENDAR_ID = 'oruspgutierrez@gmail.com'
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
 def get_calendar_service():
-    # Use the downloaded JSON credentials file
-    creds_path = os.path.join(os.path.dirname(__file__), '..', 'google_credentials.json')
-    if not os.path.exists(creds_path):
-        raise HTTPException(status_code=500, detail="Falta el archivo google_credentials.json")
+    # Use environment variable if available, otherwise file
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        try:
+            import json
+            creds_dict = json.loads(creds_json)
+            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        except Exception as e:
+            print(f"Error parsing GOOGLE_CREDENTIALS_JSON: {e}")
+            raise HTTPException(status_code=500, detail="Error con las credenciales JSON de Google")
+    else:
+        creds_path = os.path.join(os.path.dirname(__file__), '..', 'google_credentials.json')
+        if not os.path.exists(creds_path):
+            raise HTTPException(status_code=500, detail="Falta el archivo google_credentials.json o la variable de entorno")
+        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     
     try:
-        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
         service = build('calendar', 'v3', credentials=creds)
         return service
     except Exception as e:
