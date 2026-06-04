@@ -5,6 +5,18 @@
 
 ---
 
+## 🛠️ Trabajo Realizado (Sesión Actual — Spec 26: Migración VPS Dashboard)
+
+### 1. Dockerización del Frontend
+- Se creó `Dockerfile` multi-stage (Node.js + Nginx) en `dashboard-orus/`.
+- Se configuró Nginx (`nginx.conf`) para enrutamiento SPA (Single Page Application) con `try_files`.
+
+### 2. Actualización de Infraestructura
+- Se integró el servicio `dashboard` en el `docker-compose.yml` raíz.
+- Se configuró el puerto 3000 interno y se preparó para despliegue automático en EasyPanel.
+
+---
+
 ## 🛠️ Trabajo Realizado (Sesión 2026-05-28 — Spec 23: Homologación Conversacional y Blindaje)
 
 ### 1. Inicialización y Arranque de Servidores (Segundo Plano)
@@ -304,6 +316,7 @@
 | 20 | Cierre de Pago y Factura Única | ✅ Completo | Bifurcación 3A/3B. Eliminado mensaje redundante y actualizado caption. |
 | 21 | Agendamiento Humanizado | ✅ Completo | Tabla AM/PM. Reglas de fechas naturales. Sincronización asíncrona verificada. |
 | 23 | Homologación Flujo y Blindaje | ✅ Completo | Implementada intercepción silenciosa e inyección de fallback antierosivo. |
+| 26 | Migración VPS Dashboard | ✅ Completo | Dockerfile, Nginx y docker-compose actualizados para EasyPanel. |
 
 ---
 
