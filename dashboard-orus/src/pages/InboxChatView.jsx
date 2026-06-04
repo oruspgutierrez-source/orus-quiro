@@ -99,17 +99,6 @@ export default function InboxChatView() {
     // 1. Limpiar el input inmediatamente para no congelar la UI
     setInputMessage('');
     
-    // 2. Agregar el mensaje a la interfaz optimísticamente (al instante)
-    const optimisticMessage = {
-      id: 'temp-' + Date.now(),
-      user_id: selectedUser.id,
-      content: messageText,
-      role: 'agent',
-      created_at: new Date().toISOString()
-    };
-    setMessages(prev => [...prev, optimisticMessage]);
-    scrollToBottom();
-    
     setSending(true);
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
@@ -130,8 +119,6 @@ export default function InboxChatView() {
     } catch (error) {
       console.error("Error enviando mensaje manual:", error);
       alert("Error al enviar mensaje. Verifica que la API Key y la URL estén configuradas.");
-      // Podríamos remover el mensaje optimista aquí si falla
-      setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
     } finally {
       setSending(false);
     }
