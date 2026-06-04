@@ -73,9 +73,13 @@ export default function SystemLogsView() {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
+      const API_KEY = import.meta.env.VITE_API_KEY || 'OrusDashboardAdmin2026';
       
       const response = await fetch(`${API_URL}/api/logs/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'x-api-key': API_KEY
+        }
       });
       
       if (response.ok) {
@@ -84,7 +88,11 @@ export default function SystemLogsView() {
         setTotalCount(prevCount => Math.max(0, prevCount - 1));
       } else {
         const data = await response.json();
-        alert("Error al resolver: " + (data.detail || "Error desconocido"));
+        let errorMessage = "Error desconocido";
+        if (data.detail) {
+          errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        }
+        alert("Error al resolver: " + errorMessage);
       }
     } catch (err) {
       console.error(err);
