@@ -56,6 +56,25 @@ async def receive_webhook(request: Request, token: str = Query(None)):
                     print(f"[DEBUG MEDIA] {mk} = {content}", flush=True)
             print(f"{'='*60}\n", flush=True)
 
+    if event_type == "connection.update":
+        state = data_debug.get("state", "UNKNOWN")
+        reason = data_debug.get("statusReason", "")
+        severity = 'INFO' if state in ['open', 'connecting'] else 'ERROR'
+        
+        try:
+            from api.db.supabase_client import supabase
+            supabase.table('orus_logs').insert({
+                'event_type': 'EVOLUTION_CONNECTION_UPDATE',
+                'severity': severity,
+                'error_message': f"WhatsApp Connection: {state.upper()}",
+                'source_identifier': 'Evolution API',
+                'stack_trace': f"State: {state}\nReason: {reason}\nPayload: {json.dumps(data_debug)}"
+            }).execute()
+        except Exception as e:
+            print(f"Error logging connection update: {e}", flush=True)
+            
+        return {"status": "logged"}
+
     if event_type == "messages.upsert":
         data = payload.get("data", {})
         key = data.get("key", {})
