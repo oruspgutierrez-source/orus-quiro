@@ -8,10 +8,10 @@ const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const hours = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];
 
 const colorMap = {
-  emerald: { bg: 'bg-emerald-900/40 border-emerald-500/40', bar: 'bg-emerald-400', text: 'text-emerald-300', label: 'text-emerald-400' },
-  amber:   { bg: 'bg-amber-900/30 border-amber-500/30',     bar: 'bg-amber-400',   text: 'text-amber-200',   label: 'text-amber-400' },
-  slate:   { bg: 'bg-slate-700/40 border-slate-500/30',     bar: 'bg-slate-400',   text: 'text-slate-200',   label: 'text-slate-400' },
-  rose:    { bg: 'bg-rose-900/40 border-rose-500/40',       bar: 'bg-rose-400',    text: 'text-rose-300',    label: 'text-rose-400' },
+  emerald: { bg: 'bg-emerald-900/40 border-emerald-500/40', bar: 'bg-emerald-400', text: 'text-white', label: 'text-white/80' },
+  amber:   { bg: 'bg-amber-900/30 border-amber-500/30',     bar: 'bg-amber-400',   text: 'text-white',   label: 'text-white/80' },
+  slate:   { bg: 'bg-slate-700/40 border-slate-500/30',     bar: 'bg-slate-400',   text: 'text-white',   label: 'text-white/80' },
+  rose:    { bg: 'bg-rose-900/40 border-rose-500/40',       bar: 'bg-rose-400',    text: 'text-white',    label: 'text-white/80' },
 };
 
 export default function CalendarView() {
@@ -284,12 +284,11 @@ export default function CalendarView() {
                   className={`absolute mx-1 border rounded-xl p-2 transition-all cursor-pointer ${c.bg} backdrop-blur-sm flex flex-col justify-start group ${transformOrigin} ${isExpanded ? 'z-50 shadow-[0_10px_40px_rgba(0,0,0,0.5)] scale-110' : 'z-20 hover:scale-[1.01]'}`}
                   style={{
                     left: `calc(60px + ((100% - 60px) / 7) * ${ev.col})`,
-                    width: isExpanded ? '300px' : `calc(((100% - 60px) / 7) - 8px)`,
-                    top: isExpanded ? `calc(${ev.top}px - 10px)` : `${ev.top}px`,
+                    width: isExpanded ? '200px' : `calc(((100% - 60px) / 7) - 8px)`,
+                    top: `${ev.top}px`,
                     height: isExpanded ? 'max-content' : `${finalH}px`,
-                    minHeight: isExpanded ? '120px' : `${finalH}px`,
-                    overflow: isExpanded ? 'visible' : 'hidden',
-                    boxShadow: isExpanded ? '0 25px 50px -12px rgba(0, 0, 0, 0.75)' : ''
+                    minHeight: `${finalH}px`,
+                    overflow: isExpanded ? 'visible' : 'hidden'
                   }}
                 >
                   <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${c.bar}`} />
@@ -298,7 +297,7 @@ export default function CalendarView() {
                   <div className="pl-3 relative z-10 flex justify-between items-start mb-2">
                     <div className="flex-1 pr-2">
                       <p className={`text-[10px] font-bold ${c.label} mb-0.5`}>{ev.time}</p>
-                      <p className={`font-bold ${c.text} leading-tight transition-all ${isExpanded ? 'text-sm mt-1' : 'text-xs truncate'}`} style={isExpanded ? { wordBreak: 'break-word' } : {}}>{ev.title}</p>
+                      <p className={`text-xs font-bold ${c.text} leading-tight transition-all ${isExpanded ? '' : 'truncate'}`} style={isExpanded ? { wordBreak: 'break-word' } : {}}>{ev.title}</p>
                     </div>
                     {/* Botón para Añadir Nota */}
                     <button 
@@ -436,7 +435,7 @@ export default function CalendarView() {
                       </button>
                     </div>
                   </div>
-                  <p className={`text-xs text-zinc-400 leading-relaxed border-t border-zinc-800/50 pt-2 ${expandedNoteId === note.id ? '' : 'line-clamp-3'}`}>{note.note_content}</p>
+                  <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed border-t border-zinc-800/50 pt-2">{note.note_content}</p>
                 </div>
               ))
             )}
@@ -444,6 +443,47 @@ export default function CalendarView() {
         </div>
 
       </div>
+      
+      {/* Modal Pop-up de la Nota Expandida */}
+      {expandedNoteId && notes.find(n => n.id === expandedNoteId) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setExpandedNoteId(null)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-emerald-400 text-sm font-bold flex items-center gap-2 mb-2">
+                  <StickyNote size={16} /> Nota de Sesión
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {notes.find(n => n.id === expandedNoteId).client_name.split(' - ').map((part, idx) => (
+                    <span key={idx} className={idx === 0 ? "text-xl font-bold text-white" : idx === 1 ? "text-zinc-400 font-medium" : "text-zinc-500 text-sm"}>
+                      {part}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => setExpandedNoteId(null)} className="text-zinc-500 hover:text-white bg-zinc-800 hover:bg-zinc-700 p-2 rounded-full transition-colors flex-shrink-0">
+                ✕
+              </button>
+            </div>
+            <div className="bg-black/50 rounded-xl p-4 border border-zinc-800 max-h-[50vh] overflow-y-auto no-scrollbar">
+              <p className="text-zinc-300 text-sm whitespace-pre-wrap leading-relaxed">{notes.find(n => n.id === expandedNoteId).note_content}</p>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  const note = notes.find(n => n.id === expandedNoteId);
+                  setActiveNoteEvent({ id: note.event_id, title: note.client_name });
+                  setNoteContent(note.note_content);
+                  setExpandedNoteId(null);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold rounded-lg transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                <Edit2 size={16} /> Editar Contenido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
