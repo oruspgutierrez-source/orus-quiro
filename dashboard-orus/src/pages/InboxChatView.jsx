@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MoreVertical, Paperclip, Smile, Zap, Send, AlertCircle, Bot, Phone, CheckCircle, Loader2 } from 'lucide-react';
+import { MoreVertical, Paperclip, Smile, Zap, Send, AlertCircle, Bot, Phone, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function InboxChatView() {
