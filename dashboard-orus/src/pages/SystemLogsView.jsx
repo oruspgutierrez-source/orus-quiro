@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Filter, ChevronLeft, ChevronRight, Loader2, Bot, Copy, Check } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const glassCard = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
@@ -17,6 +17,12 @@ export default function SystemLogsView() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [severityFilter, setSeverityFilter] = useState('Todas las Severidades');
+  
+  // States for the AI Analysis and UX actions
+  const [analyzingLogIds, setAnalyzingLogIds] = useState(new Set());
+  const [aiAnalysis, setAiAnalysis] = useState({});
+  const [copiedLogId, setCopiedLogId] = useState(null);
+
   const limit = 50;
 
   useEffect(() => {
@@ -51,6 +57,55 @@ export default function SystemLogsView() {
     fetchLogs();
   }, [page, severityFilter]);
 
+  const handleCopy = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLogId(id);
+    setTimeout(() => setCopiedLogId(null), 2000);
+  };
+
+  const handleAnalyze = async (log) => {
+    if (aiAnalysis[log.id]) return;
+    
+    setAnalyzingLogIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(log.id);
+      return newSet;
+    });
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
+      const API_KEY = import.meta.env.VITE_API_KEY || 'OrusDashboardAdmin2026';
+      
+      const response = await fetch(`${API_URL}/api/logs/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY
+        },
+        body: JSON.stringify({
+          error_message: log.error_message || "Error desconocido",
+          stack_trace: log.stack_trace || "Sin stack trace"
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setAiAnalysis(prev => ({ ...prev, [log.id]: data.analysis }));
+      } else {
+        alert("Error al analizar: " + (data.detail || "Error desconocido"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error de conexión al solicitar análisis de IA.");
+    } finally {
+      setAnalyzingLogIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(log.id);
+        return newSet;
+      });
+    }
+  };
+
   const totalPages = Math.ceil(totalCount / limit);
 
   return (
@@ -61,7 +116,7 @@ export default function SystemLogsView() {
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent pointer-events-none" />
         <div className="relative z-10">
           <h2 className="text-xl font-bold text-slate-100 tracking-wide">Registros del Sistema</h2>
-          <p className="text-sm text-slate-400 mt-1 font-medium">Monitorea eventos del sistema en tiempo real.</p>
+          <p className="text-sm text-slate-400 mt-1 font-medium">Monitorea y analiza eventos del sistema en tiempo real.</p>
         </div>
         <div className="flex gap-3 relative z-10">
           <select 
@@ -87,43 +142,84 @@ export default function SystemLogsView() {
             <thead>
               <tr className="border-b border-zinc-700/50 bg-gradient-to-b from-white/5 to-transparent">
                 <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest w-48">Marca de Tiempo</th>
-                <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest w-36">Severidad</th>
-                <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">Mensaje</th>
+                <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest w-32">Severidad</th>
+                <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest w-48">Origen</th>
+                <th className="p-4 text-xs font-bold text-zinc-400 uppercase tracking-widest">Mensaje de Evento</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="3" className="p-8 text-center text-zinc-500">
+                  <td colSpan="4" className="p-8 text-center text-zinc-500">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
                     Cargando registros...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan="3" className="p-8 text-center text-zinc-500 font-medium">No se encontraron registros.</td>
+                  <td colSpan="4" className="p-8 text-center text-zinc-500 font-medium">No se encontraron registros.</td>
                 </tr>
               ) : (
                 logs.map((log) => {
                   const cfg = severityConfig[log.severity] || severityConfig['INFO'];
                   return (
                     <tr key={log.id} className="border-b border-zinc-800/50 hover:bg-white/[0.03] transition-colors group">
-                      <td className="p-4 text-zinc-500 text-sm font-mono whitespace-nowrap">
+                      <td className="p-4 text-zinc-500 text-sm font-mono whitespace-nowrap align-top">
                         {new Date(log.created_at).toLocaleString()}
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 align-top">
                         <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${cfg.pill}`}>
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
                           {log.severity}
                         </span>
                       </td>
-                      <td className="p-4 text-zinc-400 group-hover:text-zinc-300 text-sm transition-colors break-words max-w-2xl">
-                        <div className="font-semibold text-zinc-200 mb-1">{log.error_message || "Log del Sistema"}</div>
-                        {log.stack_trace && (
-                          <div className="text-xs font-mono text-zinc-500 bg-black/30 p-2 rounded mt-2 overflow-x-auto">
-                            {log.stack_trace}
+                      <td className="p-4 text-zinc-400 text-xs font-medium align-top">
+                        {log.event_type || 'SYSTEM_EVENT'}
+                      </td>
+                      <td className="p-4 text-zinc-400 group-hover:text-zinc-300 text-sm transition-colors break-words max-w-2xl align-top">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="font-semibold text-zinc-200 mb-1">{log.error_message || "Log del Sistema"}</div>
+                            {log.stack_trace && (
+                              <div className="text-xs font-mono text-zinc-500 bg-black/30 p-2 rounded border border-white/5 mt-2 overflow-x-auto whitespace-pre-wrap">
+                                {log.stack_trace}
+                              </div>
+                            )}
+                            
+                            {/* AI Analysis Block */}
+                            {aiAnalysis[log.id] && (
+                              <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-zinc-700/50 text-zinc-300 text-xs leading-relaxed shadow-inner">
+                                <div className="flex items-center gap-2 mb-1 text-emerald-400/80 font-medium">
+                                  <Bot size={14} /> Análisis del Ingeniero IA
+                                </div>
+                                <div className="whitespace-pre-wrap">{aiAnalysis[log.id]}</div>
+                              </div>
+                            )}
                           </div>
-                        )}
+                          
+                          {/* Actions (Visible on Hover) */}
+                          <div className="flex flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            {log.severity === 'ERROR' && !aiAnalysis[log.id] && (
+                              <button
+                                onClick={() => handleAnalyze(log)}
+                                disabled={analyzingLogIds.has(log.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-xs font-medium transition-all disabled:opacity-50"
+                                title="Analizar con IA"
+                              >
+                                {analyzingLogIds.has(log.id) ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                                Analizar
+                              </button>
+                            )}
+                            
+                            <button
+                              onClick={() => handleCopy(`${log.error_message}\n${log.stack_trace || ''}`, log.id)}
+                              className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-zinc-200 transition-all"
+                              title="Copiar Detalles"
+                            >
+                              {copiedLogId === log.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   );
