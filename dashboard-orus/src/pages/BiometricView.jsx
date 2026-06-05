@@ -53,10 +53,16 @@ export default function BiometricView() {
 
     for (const ev of evals) {
       try {
-        const { data: files, error } = await supabase.storage
+        let { data: files, error } = await supabase.storage
           .from('biometria_test')
-          .list(ev.wa_id);
+          .list(ev.id);
           
+        if (error || !files || files.filter(f => f.name !== '.emptyFolderPlaceholder').length === 0) {
+          const fallback = await supabase.storage.from('biometria_test').list(ev.wa_id);
+          files = fallback.data;
+          error = fallback.error;
+        }
+
         if (error || !files) {
           setBucketStatus(prev => ({ ...prev, [ev.id]: 'missing' }));
         } else {
@@ -81,12 +87,18 @@ export default function BiometricView() {
     setLoadingImages(true);
 
     try {
-      const folderName = evalData.wa_id;
-      // Listar archivos
-      const { data: files, error: listError } = await supabase.storage
+      let folderName = evalData.id;
+      let { data: files, error: listError } = await supabase.storage
         .from('biometria_test')
         .list(folderName);
         
+      if (listError || !files || files.filter(f => f.name !== '.emptyFolderPlaceholder').length === 0) {
+        folderName = evalData.wa_id;
+        const fallback = await supabase.storage.from('biometria_test').list(folderName);
+        files = fallback.data;
+        listError = fallback.error;
+      }
+
       if (listError) throw listError;
 
       const imagesUrls = [];
@@ -130,9 +142,13 @@ export default function BiometricView() {
 
     try {
       const zip = new JSZip();
-      const folderName = selectedEval.wa_id;
+      let folderName = selectedEval.id;
+      const { data: checkFiles } = await supabase.storage.from('biometria_test').list(folderName);
+      if (!checkFiles || checkFiles.filter(f => f.name !== '.emptyFolderPlaceholder').length === 0) {
+        folderName = selectedEval.wa_id;
+      }
       
-      // 1. Crear documento TXT con los datos dinámicos
+      // 1. Create Patient Notes TXT con los datos dinámicos
       let txtContent = `DATOS BIOMÉTRICOS DEL CONSULTANTE\n`;
       txtContent += `=================================\n\n`;
       
