@@ -25,7 +25,18 @@ export default function CalendarView() {
   const [activeNoteEvent, setActiveNoteEvent] = useState(null);
   const [noteContent, setNoteContent] = useState('');
   const [expandedEventId, setExpandedEventId] = useState(null);
-  const [eventColors, setEventColors] = useState({});
+  const [eventColors, setEventColors] = useState(() => {
+    try {
+      const saved = localStorage.getItem('orus_event_colors');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('orus_event_colors', JSON.stringify(eventColors));
+  }, [eventColors]);
   const [expandedNoteId, setExpandedNoteId] = useState(null);
 
   // Fetch Events from Google Calendar
