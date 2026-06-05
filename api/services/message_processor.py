@@ -328,15 +328,24 @@ async def _process_buffer(sender_id: str, payload: dict):
         elif session_mode == 'CONFIRMING_HANDOVER':
             if any(word in text_lower for word in ['sí', 'si', 'claro', 'por favor', 'ok', 'yes', 'confirm', 'quiero']):
                 await escalate_to_human("Confirmó transferencia a humano")
-                await wa_client.send_message(to=real_sender_id, text="Perfecto, te transferiré con un especialista. Un humano se pondrá en contacto contigo pronto por este mismo medio.")
+                msg_text = "Perfecto, te transferiré con un especialista. Un humano se pondrá en contacto contigo pronto por este mismo medio."
+                await wa_client.send_message(to=real_sender_id, text=msg_text)
+                if user_uuid:
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
             elif any(word in text_lower for word in ['no', 'cancelar', 'nunca', 'falso']):
                 if user_uuid:
                     supabase.table('orus_users').update({'session_mode': 'AI'}).eq('id', user_uuid).execute()
-                await wa_client.send_message(to=real_sender_id, text="Entiendo. Entonces, ¿cómo puedo ayudarte? Mi propósito es realizar el diagnóstico de tu hardware biológico mediante la Auditoría Biosemiótica y esto es lo que podemos hacer. ¿Deseas continuar con el proceso?")
+                msg_text = "Entiendo. Entonces, ¿cómo puedo ayudarte? Mi propósito es realizar el diagnóstico de tu hardware biológico mediante la Auditoría Biosemiótica y esto es lo que podemos hacer. ¿Deseas continuar con el proceso?"
+                await wa_client.send_message(to=real_sender_id, text=msg_text)
+                if user_uuid:
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
             else:
                 if user_uuid:
                     supabase.table('orus_users').update({'session_mode': 'COMPLAINT_MODE'}).eq('id', user_uuid).execute()
-                await wa_client.send_message(to=real_sender_id, text="Por favor, dime detalladamente cuál es tu inconveniente o queja para poder ayudarte mejor.")
+                msg_text = "Por favor, dime detalladamente cuál es tu inconveniente o queja para poder ayudarte mejor."
+                await wa_client.send_message(to=real_sender_id, text=msg_text)
+                if user_uuid:
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
             
             if user_uuid:
                 supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
@@ -344,9 +353,11 @@ async def _process_buffer(sender_id: str, payload: dict):
 
         elif session_mode == 'COMPLAINT_MODE':
             await escalate_to_human("Queja registrada")
-            await wa_client.send_message(to=real_sender_id, text="Tu incomodidad fue enviada y será evaluada por nuestro equipo. Se te enviará un mensaje cuando haya una respuesta. ¡Hasta pronto!")
+            msg_text = "Tu incomodidad fue enviada y será evaluada por nuestro equipo. Se te enviará un mensaje cuando haya una respuesta. ¡Hasta pronto!"
+            await wa_client.send_message(to=real_sender_id, text=msg_text)
             if user_uuid:
                 supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
             return
 
         else:
@@ -354,9 +365,11 @@ async def _process_buffer(sender_id: str, payload: dict):
             if any(kw in text_lower for kw in handover_keywords):
                 if user_uuid:
                     supabase.table('orus_users').update({'session_mode': 'CONFIRMING_HANDOVER'}).eq('id', user_uuid).execute()
-                await wa_client.send_message(to=real_sender_id, text="He detectado que deseas hablar con un humano o reportar un inconveniente. ¿Deseas que te transfiera con un especialista humano para resolver esto? (Responde SÍ o NO)")
+                msg_text = "He detectado que deseas hablar con un humano o reportar un inconveniente. ¿Deseas que te transfiera con un especialista humano para resolver esto? (Responde SÍ o NO)"
+                await wa_client.send_message(to=real_sender_id, text=msg_text)
                 if user_uuid:
                     supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
                 return
 
         # ── 6. LLM con Memoria ────────────────────────────────────────────────

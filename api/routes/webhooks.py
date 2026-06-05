@@ -87,6 +87,16 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         if not sender_id or "@broadcast" in sender_id:
             return {"status": "ignored"}
 
+        # Para Evolution API v2, a veces el sender ID real viene en la raíz del payload "sender"
+        root_sender = payload.get("sender")
+        if root_sender and root_sender.endswith("@s.whatsapp.net") and sender_id.endswith("@lid"):
+            print(f"[Webhook] Reemplazando LID {sender_id} por root_sender {root_sender}", flush=True)
+            sender_id = root_sender
+        else:
+            participant = key.get("participant")
+            if participant and not sender_id.endswith("@g.us"):
+                sender_id = participant
+
         # ── Tipos de media soportados ──────────────────────────────────────
         MEDIA_TYPES = {
             "imageMessage": "image",
