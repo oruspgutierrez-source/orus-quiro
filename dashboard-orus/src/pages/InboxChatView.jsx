@@ -157,6 +157,56 @@ export default function InboxChatView() {
     }
   };
 
+  const renderMessageContent = (content) => {
+    if (!content) return null;
+    
+    const combinedRegex = /(!?)\[(.*?)\]\((.*?)\)/g;
+    let parts = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = combinedRegex.exec(content)) !== null) {
+      const isImage = match[1] === '!';
+      const text = match[2];
+      const url = match[3];
+      
+      if (match.index > lastIndex) {
+        parts.push(<span key={lastIndex}>{content.substring(lastIndex, match.index)}</span>);
+      }
+      
+      if (isImage) {
+        parts.push(
+          <div key={match.index} className="my-2">
+            <a href={url} target="_blank" rel="noreferrer">
+              <img src={url} alt={text} className="max-w-[250px] max-h-[250px] rounded-lg border border-white/10 shadow-sm" />
+            </a>
+          </div>
+        );
+      } else if (text === 'Audio Adjunto') {
+        parts.push(
+          <div key={match.index} className="my-2">
+            <audio controls src={url} className="w-full max-w-[250px] h-10" />
+          </div>
+        );
+      } else {
+        parts.push(
+          <div key={match.index} className="my-2">
+            <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 underline font-semibold text-xs bg-black/20 p-2 rounded-lg border border-white/5 w-fit">
+              <Paperclip size={14} /> {text}
+            </a>
+          </div>
+        );
+      }
+      lastIndex = combinedRegex.lastIndex;
+    }
+    
+    if (lastIndex < content.length) {
+      parts.push(<span key={lastIndex}>{content.substring(lastIndex)}</span>);
+    }
+    
+    return <div className="whitespace-pre-wrap">{parts.length > 0 ? parts : content}</div>;
+  };
+
   return (
     <div className="flex-1 flex overflow-hidden p-4 gap-4 bg-white">
 
@@ -265,7 +315,7 @@ export default function InboxChatView() {
                           ? 'bg-zinc-800/80 rounded-tl-sm border border-zinc-700/80 text-zinc-200 shadow-[0_4px_15px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]' 
                           : 'bg-gradient-to-br from-emerald-900/40 to-emerald-950/40 rounded-tr-sm border border-emerald-500/20 text-emerald-100 shadow-[0_4px_15px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(16,185,129,0.2)]'
                       }`}>
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        {renderMessageContent(msg.content)}
                         <span className="text-[10px] opacity-40 mt-2 block text-right">
                           {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </span>

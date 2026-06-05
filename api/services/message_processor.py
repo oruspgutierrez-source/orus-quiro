@@ -275,7 +275,40 @@ async def _process_buffer(sender_id: str, payload: dict):
         if session_mode == 'HUMAN':
             print(f"[Processor] Mensaje ignorado, el usuario {real_sender_id} está en modo HUMAN.", flush=True)
             if user_uuid:
-                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                import uuid
+                import mimetypes
+                
+                final_content = text_body
+                if media_list:
+                    print(f"[Processor] Procesando {len(media_list)} archivos multimedia para modo HUMAN...", flush=True)
+                    for media in media_list:
+                        ext = mimetypes.guess_extension(media['mime_type']) or ""
+                        # Ajuste para audios ogg (guess_extension a veces no es exacto)
+                        if media['mime_type'] == 'audio/mp3' and ext != '.mp3':
+                            ext = '.mp3'
+                        filename = f"inbox_media/{user_uuid}/{uuid.uuid4()}{ext}"
+                        
+                        try:
+                            # Subir a supabase (biometria_test)
+                            supabase.storage.from_('biometria_test').upload(
+                                path=filename,
+                                file=media['bytes'],
+                                file_options={"content-type": media['mime_type']}
+                            )
+                            # Obtener URL publica
+                            public_url = supabase.storage.from_('biometria_test').get_public_url(filename)
+                            
+                            if "image" in media['media_type']:
+                                final_content += f"\n\n![Imagen Adjunta]({public_url})"
+                            elif "audio" in media['media_type']:
+                                final_content += f"\n\n[Audio Adjunto]({public_url})"
+                            else:
+                                final_content += f"\n\n[Documento Adjunto]({public_url})"
+                                
+                        except Exception as e:
+                            print(f"[Processor] Error subiendo media a Supabase en modo HUMAN: {e}", flush=True)
+                            
+                supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': final_content}).execute()
             return
             
         elif session_mode == 'CONFIRMING_HANDOVER':
