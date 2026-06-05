@@ -15,6 +15,7 @@ export default function InboxChatView() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [resolveContext, setResolveContext] = useState('');
+  const [showResolveDropdown, setShowResolveDropdown] = useState(false);
   
   const messagesEndRef = useRef(null);
 
@@ -306,20 +307,36 @@ export default function InboxChatView() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 relative">
                 {selectedUser.session_mode === 'HUMAN' ? (
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Contexto invisible (Opcional)" 
-                      value={resolveContext}
-                      onChange={(e) => setResolveContext(e.target.value)}
-                      className="bg-black/20 border border-emerald-500/30 text-zinc-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-emerald-500/60"
-                    />
-                    <button onClick={handleResolveSession} className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 shadow-[0_4px_10px_rgba(16,185,129,0.2)]">
+                  <>
+                    <button 
+                      onClick={() => setShowResolveDropdown(!showResolveDropdown)} 
+                      className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 shadow-[0_4px_10px_rgba(16,185,129,0.2)]"
+                    >
                       <CheckCircle size={14} /> Devolver al Bot
                     </button>
-                  </div>
+                    {showResolveDropdown && (
+                      <div className="absolute top-full right-0 mt-2 p-3 bg-zinc-800 border border-zinc-600 rounded-xl shadow-2xl z-50 w-72 flex flex-col gap-3">
+                        <p className="text-xs text-zinc-300 font-medium">Instrucción invisible para la IA (opcional):</p>
+                        <textarea 
+                          placeholder="Ej: Ya agendé al paciente, solo despídete amablemente..." 
+                          value={resolveContext}
+                          onChange={(e) => setResolveContext(e.target.value)}
+                          className="bg-zinc-900 border border-emerald-500/30 text-zinc-200 text-xs rounded-lg px-3 py-2 min-h-[60px] focus:outline-none focus:border-emerald-500/60 resize-none"
+                        />
+                        <button 
+                          onClick={() => {
+                            handleResolveSession();
+                            setShowResolveDropdown(false);
+                          }} 
+                          className="w-full text-xs bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-bold transition-all shadow-md"
+                        >
+                          Confirmar y Devolver Control
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <button onClick={handleTakeover} className="text-xs bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1">
                     👨‍💻 Tomar Control
