@@ -4,6 +4,7 @@ import DashboardView from './pages/DashboardView';
 import SystemLogsView from './pages/SystemLogsView';
 import CalendarView from './pages/CalendarView';
 import InboxChatView from './pages/InboxChatView';
+import BiometricView from './pages/BiometricView';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="logs" element={<SystemLogsView />} />
           <Route path="calendar" element={<CalendarView />} />
           <Route path="chat" element={<InboxChatView />} />
+          <Route path="biometria" element={<BiometricView />} />
         </Route>
       </Routes>
     </BrowserRouter>

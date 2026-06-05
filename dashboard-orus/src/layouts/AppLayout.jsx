@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, MessageSquare, LineChart, Users, Settings, Terminal, Shield, Network, Bell, WifiHigh, CircleUserRound, Search, HelpCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, LineChart, Users, Settings, Terminal, Shield, Network, Bell, WifiHigh, CircleUserRound, Search, HelpCircle, LogOut, FileImage } from 'lucide-react';
 import clsx from 'clsx';
 
 function AppLayout() {
@@ -23,7 +23,7 @@ function AppLayout() {
           <NavItem to="/chat" icon={MessageSquare} label="Inbox Chat" />
           <NavItem to="/calendar" icon={LineChart} label="Calendar" />
           <NavItem to="/logs" icon={Terminal} label="System Logs" />
-          <NavItem to="/security" icon={Shield} label="Security" disabled />
+          <NavItem to="/biometria" icon={FileImage} label="Biometría" />
           <NavItem to="/network" icon={Network} label="Network" disabled />
           <NavItem to="/settings" icon={Settings} label="Settings" disabled />
         </div>
