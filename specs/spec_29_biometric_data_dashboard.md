@@ -1,38 +1,43 @@
 # Spec 29: Integración de Datos Biométricos en el Dashboard
 
-## Objetivo
-Reemplazar la sección "Security" del Dashboard con un nuevo módulo "Biometría" (o "Evaluaciones"). Este módulo permitirá listar las evaluaciones recibidas en la tabla `evaluaciones_completas` y descargar las imágenes asociadas a cada evaluación empaquetadas en un archivo ZIP, nombrado automáticamente con el nombre del paciente.
+## Objetivo (Logrado)
+Reemplazar la antigua sección "Security" del Dashboard con un nuevo módulo "Biometría" para gestionar las evaluaciones de los pacientes. Este módulo permite listar las evaluaciones recibidas en la tabla `evaluaciones_completas`, verificar su estado, previsualizar las fotos en un panel lateral (Drawer) y descargar las imágenes junto a notas clínicas en un archivo ZIP nombrado automáticamente.
 
-## Análisis Técnico y Recomendación sobre el ZIP
+## Arquitectura Implementada
 
-Para descargar las imágenes en formato ZIP, tenemos dos enfoques principales. **Te recomiendo encarecidamente la Opción 1**:
+Se optó por la **creación del ZIP en el Frontend (Dashboard) con JS**.
+- **Cómo funciona:** El dashboard (React) utiliza el cliente de Supabase para obtener las URLs de las imágenes y descargar sus datos binarios. Usa `jszip` y `file-saver` para armar el archivo ZIP directamente en el navegador del administrador.
+- **Ventaja:** Libera a la VPS de tareas pesadas (CPU/Memoria), trasladando el procesamiento gráfico y de empaquetado al cliente.
 
-1. **Crear el ZIP en el Frontend (Dashboard) con JS - RECOMENDADO**
-   - **Cómo funciona:** El dashboard (React) utiliza el cliente de Supabase para descargar las imágenes directamente desde el bucket al navegador del usuario (como datos binarios/Blobs). Luego, usa una librería como `jszip` para crear el archivo ZIP localmente en la computadora del administrador y lanza la descarga.
-   - **Por qué es mejor:** Libera de toda esta carga a nuestra VPS. Empaquetar imágenes requiere memoria y CPU; hacerlo en el navegador del usuario final es la práctica estándar en paneles modernos de administración. Además, ya tienes las credenciales de Supabase en el Dashboard.
+## Funcionalidades Completadas
 
-2. **Crear el ZIP en el Backend (FastAPI o Supabase Edge Functions)**
-   - **Cómo funciona:** Creariamos una ruta en FastAPI que descargue las imágenes, arme el ZIP en memoria RAM del servidor y lo envíe de vuelta al dashboard.
-   - **Por qué NO lo recomiendo:** Podría saturar la memoria de nuestra VPS en EasyPanel si varios usuarios descargan imágenes pesadas al mismo tiempo.
+### 1. UI Base y Navegación
+- Se reemplazó "Security" por "Biometría" en `AppLayout.jsx`.
+- Se creó `BiometricView.jsx` con diseño Dark Mode Premium, empleando `glassCard` y un Layout estructurado tipo cuadrícula (Grid) para mostrar las tarjetas de pacientes.
 
-## Plan de Trabajo (Task by Task)
+### 2. Integración de Supabase y Tabla
+- Se conectó `BiometricView` a `evaluaciones_completas` para traer los datos reales de los pacientes.
+- Se implementó una lógica de escaneo asíncrono (`checkBuckets`) que verifica en tiempo real la conexión con el bucket de Storage y detecta si existen archivos en el folder (`wa_id`) de cada usuario.
 
-### Task 1: Preparación y Definición de Estructura (Tu turno)
-Necesito que me confirmes lo siguiente para poder empezar:
-1. **¿Estás de acuerdo con usar la Opción 1 (Frontend)?**
-2. **¿Cómo relacionamos las imágenes con el usuario?**
-   - ¿Las rutas de las imágenes están guardadas en alguna columna dentro de la tabla `evaluaciones_completas`? (Ej. una columna tipo JSON/Array).
-   - O bien, ¿se suben a una carpeta específica en el bucket `biometria_test` que lleva el nombre del `id` o `wa_id` del usuario? (Ej. `biometria_test/usuario_web_1779463260370/foto1.jpg`).
+### 3. Indicadores de Estado de los Datos (Status Dots)
+- **Punto Amarillo:** Bucket verificado y contiene imágenes.
+- **Punto Rojo:** No se encontraron imágenes o la carpeta no existe, indicando que se debe volver a subir.
+- *Resolución de Bugs:* Se aplicó `flex-1 min-w-0` en el contenedor del nombre/ID para activar correctamente el `truncate` de Tailwind y evitar que IDs largos empujen el indicador de estado fuera de la tarjeta.
 
-### Task 2: UI Base y Navegación
-- Reemplazar "Security" en el menú de navegación (`Sidebar`) por "Evaluaciones" o "Biometría".
-- Crear el esqueleto de la vista `BiometricView.jsx`.
+### 4. Drawer de Previsualización y Notas
+- En vez de descargar a ciegas, el administrador hace clic en "Ver Detalles y Fotos".
+- Se despliega un panel flotante lateral oscuro (Drawer) donde puede ver:
+  - Información personal completa.
+  - Una galería de previsualización de las imágenes cargadas utilizando Signed URLs por motivos de seguridad.
+  - Un cuadro de texto para incluir las **Notas del Doctor**.
 
-### Task 3: Integración de la Tabla
-- Conectar `BiometricView.jsx` a la tabla `evaluaciones_completas` de Supabase.
-- Mostrar una tabla limpia y profesional con los datos del formulario (Nombre, Creado en, ID, etc.).
+### 5. Empaquetado Automático en ZIP
+- Al exportar, el Dashboard reúne:
+  1. Todas las fotos del bucket correspondientes al paciente.
+  2. Un archivo generado en vivo `datos_paciente.txt` que incluye toda la información del paciente extraída de la tabla y las "Notas del Doctor" que se escribieron en la interfaz.
+- El ZIP se descarga nominado bajo la convención: `[Nombre del Paciente]_Evaluacion.zip`.
 
-### Task 4: Funcionalidad de Descarga en ZIP
-- Instalar `jszip` y `file-saver` en el proyecto del Dashboard.
-- Crear el script dentro del dashboard que, al hacer clic en un botón de "Descargar ZIP" en la tabla, obtenga las imágenes de ese usuario específico.
-- Empaquetar y nombrar el archivo dinámicamente: `[Nombre del Paciente]_Evaluacion.zip`.
+## Consideraciones Futuras
+- **Vercel vs VPS:** Se determinó mantener la App de recolección biométrica en Vercel por su alto rendimiento y CDN global.
+- **Registro de Errores Frontend:** En caso de fallos en la App Biométrica, los errores serán enviados directamente a la tabla `orus_logs` en Supabase para que sean monitorizados desde la pestaña "System Logs" del Dashboard actual, unificando todo el centro de comando en un solo lugar sin necesidad de tablas nuevas.
+- **Política de Supabase:** Se configuró en Supabase la política (RLS) `Allow public SELECT` en `storage.objects` (con `bucket_id = biometria_test`) para garantizar que el Dashboard pueda escanear y cargar la galería exitosamente usando la clave anónima.
