@@ -14,6 +14,7 @@ export default function InboxChatView() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [resolveContext, setResolveContext] = useState('');
   
   const messagesEndRef = useRef(null);
 
@@ -148,12 +149,35 @@ export default function InboxChatView() {
       
       await fetch(`${API_URL}/api/users/${selectedUser.id}/resolve`, {
         method: 'POST',
-        headers: { 'x-api-key': API_KEY }
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY 
+        },
+        body: JSON.stringify({ context: resolveContext.trim() || null })
       });
-      // La lista se actualizará sola vía Realtime
+      
+      setResolveContext('');
       setSelectedUser(prev => ({...prev, session_mode: 'AI'}));
     } catch (error) {
       console.error("Error al finalizar sesión:", error);
+    }
+  };
+
+  // Tomar el control (Takeover)
+  const handleTakeover = async () => {
+    if (!selectedUser || selectedUser.session_mode === 'HUMAN') return;
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://api.orusquiroterapia.online';
+      const API_KEY = import.meta.env.VITE_API_KEY || 'OrusDashboardAdmin2026';
+      
+      await fetch(`${API_URL}/api/users/${selectedUser.id}/takeover`, {
+        method: 'POST',
+        headers: { 'x-api-key': API_KEY }
+      });
+      setSelectedUser(prev => ({...prev, session_mode: 'HUMAN'}));
+    } catch (error) {
+      console.error("Error al tomar control:", error);
     }
   };
 
@@ -283,14 +307,24 @@ export default function InboxChatView() {
                 </div>
               </div>
               <div className="flex gap-2">
-                {selectedUser.session_mode === 'HUMAN' && (
-                  <button onClick={handleResolveSession} className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1">
-                    <CheckCircle size={14} /> Finalizar Intervención
+                {selectedUser.session_mode === 'HUMAN' ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Contexto invisible (Opcional)" 
+                      value={resolveContext}
+                      onChange={(e) => setResolveContext(e.target.value)}
+                      className="bg-black/20 border border-emerald-500/30 text-zinc-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-emerald-500/60"
+                    />
+                    <button onClick={handleResolveSession} className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 shadow-[0_4px_10px_rgba(16,185,129,0.2)]">
+                      <CheckCircle size={14} /> Devolver al Bot
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={handleTakeover} className="text-xs bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1">
+                    👨‍💻 Tomar Control
                   </button>
                 )}
-                <button className="text-zinc-400 hover:text-zinc-200 transition-colors p-2 rounded-full hover:bg-white/10">
-                  <MoreVertical size={20} />
-                </button>
               </div>
             </div>
 
