@@ -289,14 +289,14 @@ async def _process_buffer(sender_id: str, payload: dict):
                         filename = f"inbox_media/{user_uuid}/{uuid.uuid4()}{ext}"
                         
                         try:
-                            # Subir a supabase (biometria_test)
-                            supabase.storage.from_('biometria_test').upload(
+                            # Subir a supabase (inbox_media)
+                            supabase.storage.from_('inbox_media').upload(
                                 path=filename,
                                 file=media['bytes'],
                                 file_options={"content-type": media['mime_type']}
                             )
                             # Obtener URL publica
-                            public_url = supabase.storage.from_('biometria_test').get_public_url(filename)
+                            public_url = supabase.storage.from_('inbox_media').get_public_url(filename)
                             
                             if "image" in media['media_type']:
                                 final_content += f"\n\n![Imagen Adjunta]({public_url})"
