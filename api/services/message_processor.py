@@ -377,16 +377,18 @@ async def _process_buffer(sender_id: str, payload: dict):
         for i, chunk in enumerate(clean_chunks):
             try:
                 response = await wa_client.send_message(to=real_sender_id, text=chunk)
-                message_id = response.get("key", {}).get("id")
-                supabase.table('orus_logs').insert({
-                    'event_type': 'OUTBOUND_MESSAGE_SENT',
-                    'severity': 'INFO',
-                    'source_identifier': real_sender_id,
-                    'raw_payload': message_id or "evolution_api_outbound",
-                    'error_message': chunk[:500]
-                }).execute()
             except Exception as e:
                 print(f"Error enviando fragmento {i+1}/{len(clean_chunks)}: {e}", flush=True)
+                try:
+                    supabase.table('orus_logs').insert({
+                        'event_type': 'OUTBOUND_MESSAGE_ERROR',
+                        'severity': 'ERROR',
+                        'source_identifier': real_sender_id,
+                        'error_message': f"Error enviando fragmento: {str(e)}",
+                        'raw_payload': chunk[:500]
+                    }).execute()
+                except Exception as log_err:
+                    print(f"Error escribiendo en logs: {log_err}", flush=True)
 
             # Pausa entre fragmentos para simular escritura natural
             if i < len(clean_chunks) - 1:
