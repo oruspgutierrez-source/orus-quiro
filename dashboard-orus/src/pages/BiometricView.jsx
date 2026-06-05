@@ -10,6 +10,7 @@ export default function BiometricView() {
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [bucketStatus, setBucketStatus] = useState({}); // { [evalId]: 'loading' | 'connected' | 'missing' }
   
   // Drawer state
   const [selectedEval, setSelectedEval] = useState(null);
@@ -34,10 +35,41 @@ export default function BiometricView() {
 
       if (error) throw error;
       setEvaluations(data || []);
+
+      if (data && data.length > 0) {
+        checkBuckets(data);
+      }
     } catch (error) {
       console.error('Error fetching evaluations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkBuckets = async (evals) => {
+    const initialStatus = {};
+    evals.forEach(e => initialStatus[e.id] = 'loading');
+    setBucketStatus(prev => ({ ...prev, ...initialStatus }));
+
+    for (const ev of evals) {
+      try {
+        const { data: files, error } = await supabase.storage
+          .from('biometria_test')
+          .list(ev.wa_id);
+          
+        if (error || !files) {
+          setBucketStatus(prev => ({ ...prev, [ev.id]: 'missing' }));
+        } else {
+          const realFiles = files.filter(f => f.name !== '.emptyFolderPlaceholder');
+          if (realFiles.length > 0) {
+            setBucketStatus(prev => ({ ...prev, [ev.id]: 'connected' }));
+          } else {
+            setBucketStatus(prev => ({ ...prev, [ev.id]: 'missing' }));
+          }
+        }
+      } catch (err) {
+        setBucketStatus(prev => ({ ...prev, [ev.id]: 'missing' }));
+      }
     }
   };
 
@@ -201,13 +233,27 @@ export default function BiometricView() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
               {filteredEvaluations.map((ev) => (
                 <div key={ev.id} className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-5 hover:bg-zinc-800/80 transition-colors relative group">
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-                      <UserCircle2 size={24} />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                        <UserCircle2 size={24} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-slate-200 font-semibold truncate" title={ev.nombre}>{ev.nombre}</h3>
+                        <p className="text-xs text-slate-400 truncate">{ev.wa_id}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="text-slate-200 font-semibold truncate" title={ev.nombre}>{ev.nombre}</h3>
-                      <p className="text-xs text-slate-400 truncate">{ev.wa_id}</p>
+                    
+                    <div className="shrink-0 flex items-center justify-center w-6 h-6">
+                      {bucketStatus[ev.id] === 'loading' && (
+                        <Loader2 size={14} className="animate-spin text-slate-500" />
+                      )}
+                      {bucketStatus[ev.id] === 'connected' && (
+                        <div className="w-3 h-3 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.7)]" title="Imágenes disponibles en Bucket" />
+                      )}
+                      {bucketStatus[ev.id] === 'missing' && (
+                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.7)]" title="Sin imágenes en Bucket" />
+                      )}
                     </div>
                   </div>
                   
