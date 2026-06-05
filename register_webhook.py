@@ -52,7 +52,7 @@ def main():
                 "enabled": True,
                 "url": full_webhook_url,
                 "byEvents": False,
-                "base64": False,
+                "base64": True,
                 "events": ["MESSAGES_UPSERT"]
             }
         }
