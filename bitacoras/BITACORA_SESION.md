@@ -16,6 +16,21 @@
 
 ---
 
+## 🎯 PRÓXIMA SESIÓN: Protocolo de Hard-Reset Criptográfico (Spec 33)
+
+**Problema Crítico Pendiente:**
+El usuario (teléfono terminado en 18) sigue recibiendo el error criptográfico *"Esperando mensaje. Esto puede tomar tiempo"* en su celular, a pesar de las reinstalaciones. Se sospecha que la copia de seguridad de WhatsApp (Google Drive/iCloud) está restaurando el estado corrupto de las llaves, y/o Evolution API mantiene caché de sesiones corruptas en Redis.
+
+**Protocolo de Resolución Acordado para la Siguiente Sesión:**
+Se debe ejecutar un **Hard Reset** sincronizado entre el dispositivo cliente y la API:
+1. **Limpieza Cliente:** En el celular, eliminar el chat con el bot (para evitar el caché local), desconectar todos los dispositivos vinculados (WhatsApp Web/Escritorio) y realizar una copia de seguridad limpia sin ese chat.
+2. **Desinstalación:** Desinstalar WhatsApp del dispositivo móvil.
+3. **Limpieza Servidor (Evolution API):** Entrar a la VPS/EasyPanel y forzar un reseteo profundo de la instancia de Evolution API (eliminar la instancia, limpiar la caché de Redis y los logs asociados para purgar cualquier llave antigua).
+4. **Reinstalación y Pareo:** Reinstalar WhatsApp en el móvil, restaurar la copia de seguridad (que ya no tiene el chat corrupto), crear de nuevo la instancia en Evolution API, generar el código QR/Pairing Code y reconectar.
+5. **Prueba en Limpio:** Escribir al bot desde cero para confirmar que el intercambio de llaves de cifrado E2E se realiza correctamente.
+
+---
+
 ## 🛠️ Trabajo Realizado (Sesión Actual — Spec 32: Handover Dinámico y Amnesia Controlada)
 
 ### 1. Intervención Unilateral (Takeover)
