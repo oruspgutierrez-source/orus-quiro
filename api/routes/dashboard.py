@@ -28,8 +28,11 @@ def get_user_history(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class ResolveSessionPayload(BaseModel):
+    context: str | None = None
+
 @router.post("/{user_id}/resolve")
-def resolve_human_session(user_id: str):
+def resolve_human_session(user_id: str, payload: ResolveSessionPayload = None):
     """Cambia el session_mode de vuelta a 'AI' y admin_notified a False, y marca la intervención como resuelta."""
     try:
         response = supabase.table('orus_users').update({
@@ -44,6 +47,13 @@ def resolve_human_session(user_id: str):
             'resolved_at': now_str,
             'resolved_by': 'admin'
         }).eq('user_id', user_id).is_('resolved_at', 'null').execute()
+
+        if payload and payload.context:
+            supabase.table('orus_messages').insert({
+                'user_id': user_id,
+                'role': 'assistant',
+                'content': f"[SYSTEM_NOTE] {payload.context}"
+            }).execute()
 
         return {"status": "success", "data": response.data}
     except Exception as e:
@@ -66,6 +76,18 @@ def request_intervention(user_id: str, payload: InterventionRequest):
             'admin_notified': False
         }).eq('id', user_id).execute()
 
+        return {"status": "success", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{user_id}/takeover")
+def takeover_session(user_id: str):
+    """Admin toma control unilateral de la sesión."""
+    try:
+        response = supabase.table('orus_users').update({
+            'session_mode': 'HUMAN',
+            'admin_notified': False
+        }).eq('id', user_id).execute()
         return {"status": "success", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

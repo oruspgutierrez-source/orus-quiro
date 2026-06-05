@@ -376,11 +376,19 @@ async def _process_buffer(sender_id: str, payload: dict):
         history_msgs = []
         if user_uuid:
             try:
-                history = supabase.table('orus_messages').select('role, content').eq('user_id', user_uuid).order('created_at', desc=True).limit(6).execute()
+                history = supabase.table('orus_messages').select('role, content').eq('user_id', user_uuid).order('created_at', desc=True).limit(8).execute()
                 if history.data:
-                    for msg in reversed(history.data):
+                    for msg in history.data:
+                        if "[SYSTEM_NOTE]" in msg['content']:
+                            # Si encontramos una nota interna, la insertamos como contexto del LLM y CORTAMOS el historial más viejo
+                            note = msg['content'].replace('[SYSTEM_NOTE]', '').strip()
+                            history_msgs.append({"role": "model", "text": f"[Instrucción Interna del Administrador]: {note}. Retoma la conversación a partir de aquí."})
+                            break
+                        
                         gemini_role = "model" if msg['role'] == 'assistant' else "user"
                         history_msgs.append({"role": gemini_role, "text": msg['content']})
+                    
+                    history_msgs.reverse() # Invertir para que queden cronológicos
                 
                 supabase.table('orus_messages').insert({
                     'user_id': user_uuid,
