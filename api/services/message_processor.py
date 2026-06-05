@@ -380,6 +380,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                 message_id = response.get("key", {}).get("id")
                 supabase.table('orus_logs').insert({
                     'event_type': 'OUTBOUND_MESSAGE_SENT',
+                    'severity': 'INFO',
                     'source_identifier': real_sender_id,
                     'raw_payload': message_id or "evolution_api_outbound",
                     'error_message': chunk[:500]
