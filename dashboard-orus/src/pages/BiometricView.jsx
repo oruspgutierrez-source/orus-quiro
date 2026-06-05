@@ -234,13 +234,13 @@ export default function BiometricView() {
               {filteredEvaluations.map((ev) => (
                 <div key={ev.id} className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-5 hover:bg-zinc-800/80 transition-colors relative group">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0 pr-2">
                       <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
                         <UserCircle2 size={24} />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-slate-200 font-semibold truncate" title={ev.nombre}>{ev.nombre}</h3>
-                        <p className="text-xs text-slate-400 truncate">{ev.wa_id}</p>
+                        <p className="text-xs text-slate-400 truncate" title={ev.wa_id}>{ev.wa_id}</p>
                       </div>
                     </div>
                     
