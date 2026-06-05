@@ -50,3 +50,12 @@ Se requerirá actualizar este componente para que reconozca los enlaces de imág
 1.  Configurar las políticas de seguridad (RLS) en el bucket de Supabase para permitir la subida desde el Backend y la lectura pública.
 2.  Implementar la lógica de subida (Upload) en el bloque `if session_mode == 'HUMAN':` de `message_processor.py`.
 3.  Implementar la capa de parseo en `InboxChatView.jsx` para convertir los URLs adjuntos en reproductores o visores web.
+
+## 6. Estado Actual (05/06/2026) - COMPLETADO
+La integración multimodal para el Inbox Chat se ha implementado y estabilizado exitosamente en producción:
+- **Almacenamiento**: Creado el bucket `inbox_media` en Supabase con políticas de acceso público habilitadas.
+- **Procesamiento y Frontend**: `message_processor.py` fue actualizado para interceptar medios (imágenes, audios, documentos) en sesiones `HUMAN`, almacenarlos y convertirlos a sintaxis Markdown en los mensajes. El dashboard (`InboxChatView.jsx`) parsea este Markdown para presentar los elementos UI correctos (visor de imagen, reproductor nativo `<audio>`, o botón de descarga).
+- **Hardening / Fix de Evoltuion API (Error 403)**:
+  - Se descubrió que la descarga asíncrona de Evolution API (`getBase64FromMediaMessage`) provocaba rechazos HTTP 403 por parte de los servidores de Meta (WhatsApp CDN) de manera esporádica (especialmente en imágenes reenviadas o cargadas desde WhatsApp Web).
+  - **Solución implementada:** Se actualizó la configuración global del Webhook en Evolution API (archivos `register_prod_webhook.py` y relacionados) estableciendo `"webhookBase64": true`. Esto obliga a Evolution a enviar el Base64 *dentro del payload inicial*, anulando la necesidad de realizar peticiones adicionales y mitigando definitivamente los bloqueos 403.
+  - El backend ahora extrae de inmediato el archivo desde el webhook y lo deposita en Supabase Storage sin fallos.
