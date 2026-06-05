@@ -82,20 +82,21 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         if key.get("fromMe") is True:
             return {"status": "ignored", "reason": "fromMe=true"}
 
-        sender_id = key.get("remoteJid")
+        sender_id = key.get("remoteJid", "")
+        
+        # Resolver @lid al JID real inmediatamente para todo el sistema
+        if sender_id.endswith("@lid"):
+            from api.services.wa_client import wa_client
+            real_jid = await wa_client.resolve_lid(sender_id)
+            if real_jid != sender_id:
+                print(f"[Webhook] LID {sender_id} resuelto a {real_jid} exitosamente.", flush=True)
+                sender_id = real_jid
+            else:
+                print(f"[Webhook] ADVERTENCIA: No se pudo resolver el LID {sender_id}", flush=True)
 
-        if not sender_id or "@broadcast" in sender_id:
-            return {"status": "ignored"}
-
-        # Para Evolution API v2, a veces el sender ID real viene en la raíz del payload "sender"
-        root_sender = payload.get("sender")
-        if root_sender and root_sender.endswith("@s.whatsapp.net") and sender_id.endswith("@lid"):
-            print(f"[Webhook] Reemplazando LID {sender_id} por root_sender {root_sender}", flush=True)
-            sender_id = root_sender
-        else:
-            participant = key.get("participant")
-            if participant and not sender_id.endswith("@g.us"):
-                sender_id = participant
+        participant = key.get("participant")
+        if participant and not sender_id.endswith("@g.us"):
+            sender_id = participant
 
         # ── Tipos de media soportados ──────────────────────────────────────
         MEDIA_TYPES = {
