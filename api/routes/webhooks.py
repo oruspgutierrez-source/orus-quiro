@@ -116,15 +116,23 @@ async def receive_webhook(request: Request, token: str = Query(None)):
                 # NO descargar aquí — solo guardar metadata + message_key
                 # La descarga se hace en _process_buffer después del debounce
                 # (le da tiempo a Evolution API para almacenar el mensaje)
+                
+                # A veces Evolution API ya envía el base64 en el webhook si está configurado
+                # Puede venir en data["base64"] o message["base64"] o en media_msg
+                direct_base64 = payload.get("base64") or data.get("base64") or message.get("base64")
+                if not direct_base64 and isinstance(media_msg, dict):
+                    direct_base64 = media_msg.get("base64")
+                
                 media_info = {
                     "type": media_type,
                     "mime_type": mime_type.split(";")[0].strip(),
                     "message_key": key,  # Para descargar después
                     "message_obj": message,  # Contiene llaves criptográficas
                     "caption": caption,
-                    "file_name": file_name
+                    "file_name": file_name,
+                    "base64": direct_base64  # Puede ser None, si lo es, se descarga
                 }
-                print(f"[Webhook] Media detectado: {media_type} ({mime_type}), caption={caption}", flush=True)
+                print(f"[Webhook] Media detectado: {media_type} ({mime_type}), caption={caption}, tiene_base64={bool(direct_base64)}", flush=True)
                 break  # Solo procesar el primer tipo de media encontrado
 
         # Si no hay texto NI media, ignorar

@@ -141,7 +141,21 @@ async def _process_buffer(sender_id: str, payload: dict):
             if not message_key or not message_obj:
                 continue
                 
-            media_bytes = await wa_client.download_media(message_key, message_obj)
+            media_bytes = None
+            if media_meta.get("base64"):
+                import base64
+                print("[Processor] Usando base64 directamente del webhook", flush=True)
+                b64_string = media_meta["base64"]
+                if "," in b64_string:
+                    b64_string = b64_string.split(",", 1)[1]
+                try:
+                    media_bytes = base64.b64decode(b64_string)
+                except Exception as e:
+                    print(f"[Processor] Error decodificando base64 directo: {e}", flush=True)
+            
+            if not media_bytes:
+                media_bytes = await wa_client.download_media(message_key, message_obj)
+                
             if media_bytes:
                 # ── CONVERSIÓN DE AUDIO OGG A MP3 ──
                 if "audio" in media_meta["type"]:
