@@ -1,19 +1,57 @@
 # Bitácora de Sesión — Orus Quiro Bot
 
-**Última actualización:** 2026-05-28 17:00 BRT
-**Estado:** Servidores Operativos | Spec 23 Diseñado y Planificado | Resiliencia contra caídas de contexto de Antigravity 2.0 activa
+**Última actualización:** 2026-06-05 17:40 BRT
+**Estado:** Servidores Operativos en Producción | Spec 32 Completado (Handover Dinámico & Amnesia) [NOTA: El Dashboard está en la VPS/EasyPanel. Lo único en Vercel es la app Biométrica].
 
 ---
 
-## 🛠️ Trabajo Realizado (Sesión Actual — Dashboard UI & Notas)
+## 🎯 Spec 32 Activo: Handover Dinámico, Inyección de Contexto y Telemetría de Errores
 
-### 1. Correcciones en Gestión de Notas Clínicas
-- **Fix de Eliminación Inmediata:** Modificado `CalendarView.jsx` para recuperar y asignar el UUID real de la base de datos de Supabase en el estado local tras la creación optimista, resolviendo el error `404` al intentar borrar notas recién creadas.
-- **Mejora UX en Lectura:** Implementado un Modal Flotante (Pop-Up oscuro centrado) con scroll propio que se activa al hacer clic en una nota de la barra lateral, eliminando la interrupción de abrir el panel de edición involuntariamente.
-- **Acceso a Edición:** Botón específico de "Editar Contenido" añadido de forma exclusiva tanto en estado hover (lista lateral) como dentro del Modal.
+**Objetivos Estratégicos Acordados:**
+1. **[X] Intervención Humana Unilateral (Takeover):** El Dashboard debe permitir al admin tomar el control (`HUMAN` mode) en cualquier momento, sin esperar a que el usuario active la ruta de escalado.
+2. **[X] Handback Contextual Inteligente:** Al devolver el control al bot (`AI` mode), el bot NO debe procesar la cola de mensajes históricos (ej. imágenes/audios que el admin ya respondió) para evitar "alucinaciones" o respuestas fuera de contexto.
+3. **[X] Inyección de Prompts Internos:** El admin debe poder inyectar un "mensaje fantasma" en Supabase (ej. *"Ya evalué su radiografía, pídele los datos de reserva"*) para guiar el re-ingreso del bot.
+4. **[X] Modo Silencio post-Handback:** Al volver a `AI`, el bot corta el historial pasado. Solo actuará al procesar la nota y el siguiente mensaje, ignorando adjuntos antiguos.
+5. **[ ] Telemetría de Errores Críticos:** Capturar el evento `messages.update` de Evolution API para auditar fallos de encriptación y notificar vía Telegram/Dashboard para prevenir caídas silenciosas.
 
-### 2. Estilos del Calendario
-- **Unificación Visual de Citas:** El texto (títulos y horas) de las tarjetas de eventos en la grilla del calendario ha sido estandarizado en color blanco puro, independientemente del código de color dinámico asignado al contenedor para mejorar contraste.
+---
+
+## 🛠️ Trabajo Realizado (Sesión Actual — Spec 32: Handover Dinámico y Amnesia Controlada)
+
+### 1. Intervención Unilateral (Takeover)
+- Se implementó el endpoint `POST /api/users/{user_id}/takeover` en el backend para permitir al admin forzar el modo `HUMAN`.
+- El Dashboard fue actualizado con el botón **"👨‍💻 Tomar Control"**.
+
+### 2. Handback Contextual Inteligente
+- Se agregó una interfaz desplegable (dropdown) al botón **"Devolver al Bot"** en `InboxChatView.jsx`. El administrador ahora puede proporcionar instrucciones invisibles para guiar el regreso del bot.
+- El endpoint `/resolve` ahora acepta este texto y lo inserta en `orus_messages` con la etiqueta especial `[SYSTEM_NOTE]`.
+
+### 3. Amnesia Controlada
+- Se reescribió la lógica de consulta histórica del bot en `message_processor.py`. Si el iterador detecta una etiqueta `[SYSTEM_NOTE]`, inserta una instrucción interna para el LLM y **corta el historial**, volviendo invisible todo lo anterior al "takeover".
+
+### 4. Directivas Multimodales del Agente
+- Se corrigió el `gemini_client.py` para prohibir explícitamente al bot interpretar imágenes de manos (redireccionando su rol a asistente de recolección clínica).
+- Se garantizó que procese notas de voz para dirigir hacia el embudo de ventas sin solicitar transcripciones.
+
+---
+
+## 🛠️ Trabajo Realizado (Sesión Actual — Spec 31: Multimodal Inbox & Corrección de Routing LID)
+
+### 1. Corrección Crítica de Routing (@lid)
+- **Extracción de Sender Real en Webhooks:** Se identificó que WhatsApp Cloud API/Evolution API v2 enmascara a ciertos usuarios provenientes de ads/botones con el sufijo `@lid`, lo cual causaba errores `400 Bad Request` al intentar enviarles mensajes proactivos (ej. desde el dashboard o durante handovers automáticos). Se modificó `api/routes/webhooks.py` para extraer el `sender` real (formato `@s.whatsapp.net`) desde la raíz del payload, puenteando completamente la restricción de LIDs.
+- **Sincronización en Base de Datos:** Los registros de usuarios bloqueados bajo IDs de `@lid` fueron actualizados en Supabase con su JID real, normalizando la capacidad de enviar y recibir mensajes desde el Dashboard.
+
+### 2. Visibilidad de Transición Handover
+- **Registro de Interacciones Fantasma:** Se reestructuró la lógica de escalado a humanos en `api/services/message_processor.py`. Anteriormente, cuando el bot detectaba una intención de hablar con una persona (keywords como "humano", "persona") y entraba en modo `CONFIRMING_HANDOVER`, el prompt que le enviaba al usuario ("He detectado que deseas hablar con un humano...") no se almacenaba en `orus_messages`. Esto causaba confusión en el Dashboard. Ahora, todos los prompts transicionales generados por la máquina de estados se inyectan explícitamente en el historial del Dashboard.
+
+### 3. Integración Inbox Multimodal (WhatsApp)
+- **Pipeline Webhook-to-Base64:** Resolución de errores 403 de descarga estandarizando la ingesta de contenido multimodal (imágenes, audios). Las resoluciones de las imágenes se mantienen originales según las entrega WhatsApp; el backend no las comprime.
+- **Renderizado en Admin Chat:** Las imágenes y audios enviados vía WhatsApp ahora se capturan de forma fiable en la base de datos y se renderizan en la interfaz de chat del administrador (Orus Dashboard).
+
+### 4. Optimización Orus Dashboard UI & Backend
+- **Gestión de Notas Clínicas (Google Calendar):** Sincronización backend en producción mediante variables de entorno para que la Bitácora recupere y muestre citas en tiempo real.
+- **Fix de Eliminación Inmediata:** Modificado `CalendarView.jsx` para recuperar y asignar el UUID real de Supabase tras la creación optimista de notas.
+- **Mejora UX en Lectura:** Implementado un Modal Flotante (Pop-Up oscuro centrado) con scroll propio para leer las notas sin interrupciones.
 
 ---
 
