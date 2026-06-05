@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MoreVertical, Paperclip, Smile, Zap, Send, AlertCircle, Bot, Phone, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function InboxChatView() {
+  const [searchParams] = useSearchParams();
+  const initialUserId = searchParams.get('userId');
+
   const [activeUsers, setActiveUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -25,11 +29,21 @@ export default function InboxChatView() {
       const { data } = await supabase
         .from('orus_users')
         .select('*')
-        .order('session_mode', { ascending: false }) // 'HUMAN' > 'AI' (alfabeticamente, H va antes que A) wait, H comes after A. Let's just order by updated_at
+        .order('session_mode', { ascending: false }) // 'HUMAN' > 'AI'
         .order('last_interaction', { ascending: false })
         .limit(20);
       
-      if (data) setActiveUsers(data);
+      if (data) {
+        setActiveUsers(data);
+        
+        // Si hay un userId en la URL, auto-seleccionar
+        if (initialUserId && !selectedUser) {
+          const userToSelect = data.find(u => u.id === initialUserId);
+          if (userToSelect) {
+            setSelectedUser(userToSelect);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
     } finally {

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, Bot, Headset, ArrowRight, TrendingUp, MessageSquare } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 const glassCard = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 border border-slate-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
 const darkCard  = "relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-black border border-zinc-700/50 shadow-[0_20px_40px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md";
 
 export default function DashboardView() {
+  const navigate = useNavigate();
   const [handovers, setHandovers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalMessages, setTotalMessages] = useState(0);
@@ -172,7 +174,11 @@ export default function DashboardView() {
               </div>
             ) : (
               handovers.map((item, i) => (
-                <div key={item.id || i} className={`p-3 rounded-xl cursor-pointer flex items-center gap-3 border transition-all ${item.urgent ? 'border-red-500/20 bg-red-500/5 hover:bg-red-500/10' : 'border-transparent hover:bg-white/5 hover:border-white/10'}`}>
+                <div 
+                  key={item.id || i} 
+                  onClick={() => navigate(`/chat?userId=${item.id}`)}
+                  className={`p-3 rounded-xl cursor-pointer flex items-center gap-3 border transition-all ${item.urgent ? 'border-red-500/20 bg-red-500/5 hover:bg-red-500/10' : 'border-transparent hover:bg-white/5 hover:border-white/10'}`}
+                >
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 border border-slate-600/50 shrink-0 shadow-inner flex items-center justify-center">
                     <span className="text-slate-300 text-xs font-bold">{item.name[0]?.toUpperCase()}</span>
                   </div>
@@ -186,7 +192,16 @@ export default function DashboardView() {
             )}
           </div>
           <div className="p-3 border-t border-slate-800 relative z-10">
-            <button className="w-full py-2 text-sm font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl border border-slate-700/50 transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <button 
+              onClick={() => {
+                if (handovers.length > 0) {
+                  navigate(`/chat?userId=${handovers[0].id}`);
+                } else {
+                  navigate('/chat');
+                }
+              }}
+              className="w-full py-2 text-sm font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl border border-slate-700/50 transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            >
               Ver En Inbox
             </button>
           </div>
