@@ -16,18 +16,21 @@
 
 ---
 
-## 🎯 PRÓXIMA SESIÓN: Protocolo de Hard-Reset Criptográfico (Spec 33)
+## 🎯 PRÓXIMA SESIÓN: Protocolo de Hard-Reset Criptográfico y Refactorización del Routing (Spec 33)
 
-**Problema Crítico Pendiente:**
-El usuario (teléfono terminado en 18) sigue recibiendo el error criptográfico *"Esperando mensaje. Esto puede tomar tiempo"* en su celular, a pesar de las reinstalaciones. Se sospecha que la copia de seguridad de WhatsApp (Google Drive/iCloud) está restaurando el estado corrupto de las llaves, y/o Evolution API mantiene caché de sesiones corruptas en Redis.
+**Problemas Críticos Pendientes:**
+1. **Fallo de Encriptación de Meta ("Waiting for message"):** El celular del admin sigue en un loop de "Esperando mensaje" debido a corrupción de llaves / caché de Redis en Evolution API o copias de seguridad corruptas en Google Drive.
+2. **Caos en el Routing `@lid`:** El parche del `@lid` implementado hoy falló en el caso de respuestas directas desde notificaciones/mensajes del dashboard. Un usuario (la novia) respondió y su mensaje entró al sistema con el ID cifrado `@lid`. El bot le respondió a ese ID cifrado, por lo que el mensaje se quedó en el Dashboard y jamás llegó a WhatsApp.
 
-**Protocolo de Resolución Acordado para la Siguiente Sesión:**
-Se debe ejecutar un **Hard Reset** sincronizado entre el dispositivo cliente y la API:
-1. **Limpieza Cliente:** En el celular, eliminar el chat con el bot (para evitar el caché local), desconectar todos los dispositivos vinculados (WhatsApp Web/Escritorio) y realizar una copia de seguridad limpia sin ese chat.
-2. **Desinstalación:** Desinstalar WhatsApp del dispositivo móvil.
-3. **Limpieza Servidor (Evolution API):** Entrar a la VPS/EasyPanel y forzar un reseteo profundo de la instancia de Evolution API (eliminar la instancia, limpiar la caché de Redis y los logs asociados para purgar cualquier llave antigua).
-4. **Reinstalación y Pareo:** Reinstalar WhatsApp en el móvil, restaurar la copia de seguridad (que ya no tiene el chat corrupto), crear de nuevo la instancia en Evolution API, generar el código QR/Pairing Code y reconectar.
-5. **Prueba en Limpio:** Escribir al bot desde cero para confirmar que el intercambio de llaves de cifrado E2E se realiza correctamente.
+**Hoja de Ruta Acordada para la Siguiente Sesión:**
+Antes de tocar código a ciegas o improvisar:
+1. **Auditoría Documental:** Buscar e investigar la documentación oficial de Evolution API v2 respecto a `@lid` (Linked IDs) y el manejo de flujos híbridos (JID normal vs LID).
+2. **Prueba y Error Estructurado:** Crear un entorno seguro para inyectar payloads reales capturados de los logs y diseñar un parser/resolver de LIDs que sea 100% infalible antes de pasarlo a producción.
+3. **Hard-Reset Sincronizado:** 
+   - *Cliente:* Eliminar chat, desconectar dispositivos, backup limpio. Desinstalar WhatsApp.
+   - *Servidor:* Destruir instancia en EasyPanel, purgar Redis, limpiar logs.
+   - *Reconexión:* Instalar limpio y emparejar bot desde cero.
+4. **Alarma Anti-Amateur:** Establecer el sistema de telemetría para que detecte estos quiebres a nivel API y avise por Telegram en tiempo real.
 
 ---
 
