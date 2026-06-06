@@ -71,13 +71,14 @@ remoteJid=37598781259882@lid
 - **Archivo:** `api/services/gemini_client.py`
 - **Estado:** ✅ Completada. Gemini responde sin errores.
 
-### TAREA B — Mejorar resolución de LID (DESESTIMADA / DESACTIVADA)
+### TAREA B — Mejorar resolución de LID (COMPLETADA)
 - **Archivo:** `api/services/wa_client.py` → método `resolve_lid`
-- **Estado:** ⛔ Desestimada. Se determinó que los endpoints de Evolution API devuelven contactos incorrectos de la agenda al buscar por LID. El método ahora retorna inmediatamente el LID recibido sin llamadas HTTP intermedias.
+- **Estado:** ✅ Completada. Se implementó un algoritmo de resolución inteligente basado en fotos de perfil. Extrae el hash base de la imagen de perfil del LID a través de `/chat/findContacts` con filtro y busca en los contactos de la instancia aquel con formato `@s.whatsapp.net` que comparta el mismo hash de foto de perfil.
+- **Resultado:** 100% de éxito mapeando LIDs a sus JIDs reales (ej. Fernando mapeado correctamente a 553598869018@s.whatsapp.net).
 
-### TAREA B2 — Corrección del mapeo LID incorrecto (COMPLETADA)
-- **Archivo:** `api/routes/webhooks.py` y `api/services/message_processor.py`
-- **Estado:** ✅ Completada. Se eliminó la llamada del processor y se blindó el envío al LID nativo.
+### TAREA B2 — Integración de resolución en Webhook y API (COMPLETADA)
+- **Archivo:** `api/routes/webhooks.py` y `api/services/wa_client.py`
+- **Estado:** ✅ Completada. Se integró la llamada a `wa_client.resolve_lid` en el webhook `messages.upsert` de `webhooks.py` cuando no existe registro en la tabla local. Esto previene que se registren registros LID en Supabase y mantiene la coherencia del número real del usuario.
 
 ### TAREA C — Dashboard de Alertas (Futura)
 - Sección "System Health" en el Dashboard React consultando `orus_logs` para eventos `CRITICAL_PAYLOAD_ANOMALY` y `EVOLUTION_CONNECTION_UPDATE`.

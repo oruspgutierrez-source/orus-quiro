@@ -173,13 +173,17 @@ async def receive_webhook(request: Request, token: str = Query(None)):
             # /chat/findContacts devuelve números aleatorios de otros contactos, no el del remitente
             if sender_id.endswith("@lid"):
                 real_jid = _lid_to_jid.get(sender_id)
+                if not real_jid:
+                    from api.services.wa_client import wa_client
+                    real_jid = await wa_client.resolve_lid(sender_id)
+                    if real_jid and not real_jid.endswith("@lid"):
+                        _lid_to_jid[sender_id] = real_jid
+                
                 if real_jid:
-                    print(f"[LID MAP] {sender_id} → {real_jid} (tabla local)", flush=True)
+                    print(f"[LID MAP Webhook] {sender_id} → {real_jid}", flush=True)
                     sender_id = real_jid
                 else:
-                    # LID sin mapear aún: usar el LID directamente (WhatsApp enruta OK)
-                    # El registro en Supabase quedará como LID hasta que llegue contacts.update
-                    print(f"[LID MAP] ADVERTENCIA: {sender_id} sin entrada en tabla. Usando LID como sender.", flush=True)
+                    print(f"[LID MAP Webhook] ADVERTENCIA: {sender_id} sin entrada ni resolución. Usando LID como fallback.", flush=True)
     
             participant = key.get("participant")
             if participant and not sender_id.endswith("@g.us"):

@@ -23,11 +23,90 @@ class WhatsAppClient:
 
     async def resolve_lid(self, lid: str) -> str:
         """
-        Retorna el identificador original.
-        [Spec 34] Se desactiva la resolución remota ya que findContacts/fetchProfile
-        devuelven mapeos erróneos e inestables. WhatsApp enruta a LIDs nativamente de forma exitosa.
+        [Spec 34] Resuelve un identificador LID (ej. 37598781259882@lid)
+        a su JID real de WhatsApp (ej. 553598869018@s.whatsapp.net) usando
+        la coincidencia del hash de la foto de perfil en los contactos de la instancia.
         """
+        if not lid or not isinstance(lid, str):
+            return lid
+        if not lid.endswith("@lid"):
+            return lid
+
+        # 1. Comprobar caché en memoria
+        if lid in self._lid_cache:
+            resolved = self._lid_cache[lid]
+            print(f"[LID RESOLVER] Caché Hit: {lid} → {resolved}", flush=True)
+            return resolved
+
+        # 2. Consultar detalles del contacto LID
+        endpoint = f"{self.api_url}/chat/findContacts/{self.instance_name}"
+        headers = self._get_headers()
+        
+        try:
+            import re
+            print(f"[LID RESOLVER] Resolviendo {lid} via Evolution API...", flush=True)
+            async with aiohttp.ClientSession() as session:
+                payload_find = {"where": {"remoteJid": lid}}
+                async with session.post(endpoint, json=payload_find, headers=headers, ssl=False, timeout=10) as r1:
+                    if r1.status == 200:
+                        contacts = await r1.json()
+                        if not contacts or not isinstance(contacts, list):
+                            print(f"[LID RESOLVER] No se encontró el contacto LID {lid} en Evolution.", flush=True)
+                            return lid
+                        
+                        lid_contact = contacts[0]
+                        profile_pic = lid_contact.get("profilePicUrl")
+                        if not profile_pic:
+                            print(f"[LID RESOLVER] El contacto LID {lid} no tiene foto de perfil para asociar.", flush=True)
+                            return lid
+                        
+                        # Extraer el hash base del nombre de archivo de la foto (e.g. 536480398_2789458071445842_7372968268516155003)
+                        match = re.search(r'/([^/]+)_n\.(jpg|jpeg|png|webp)', profile_pic)
+                        if not match:
+                            # Intentar fallback para otros formatos de URL
+                            match = re.search(r'/([^/?]+)', profile_pic)
+                            pic_id = match.group(1).split('_')[0] if match else profile_pic
+                        else:
+                            pic_id = match.group(1)
+                            
+                        if not pic_id:
+                            print(f"[LID RESOLVER] No se pudo parsear el hash de imagen para {lid}.", flush=True)
+                            return lid
+
+                        print(f"[LID RESOLVER] Hash de foto de perfil obtenido: {pic_id}. Buscando coincidencia...", flush=True)
+                        
+                        # 3. Obtener la lista completa de contactos
+                        async with session.post(endpoint, json={}, headers=headers, ssl=False, timeout=10) as r2:
+                            if r2.status == 200:
+                                all_contacts = await r2.json()
+                                if isinstance(all_contacts, list):
+                                    for c in all_contacts:
+                                        c_jid = c.get("remoteJid", "")
+                                        if c_jid and not c_jid.endswith("@lid") and ("@s.whatsapp.net" in c_jid or "@c.us" in c_jid):
+                                            c_pic = c.get("profilePicUrl")
+                                            if c_pic:
+                                                c_match = re.search(r'/([^/]+)_n\.(jpg|jpeg|png|webp)', c_pic)
+                                                c_pic_id = c_match.group(1) if c_match else None
+                                                if not c_pic_id:
+                                                    c_match = re.search(r'/([^/?]+)', c_pic)
+                                                    c_pic_id = c_match.group(1).split('_')[0] if c_match else None
+                                                
+                                                if c_pic_id == pic_id:
+                                                    resolved = c_jid
+                                                    self._lid_cache[lid] = resolved
+                                                    print(f"[LID RESOLVER] ÉXITO: {lid} mapeado a {resolved} (pushName: {c.get('pushName')})", flush=True)
+                                                    return resolved
+                                    print(f"[LID RESOLVER] No se encontró contacto con la misma foto de perfil para {lid}.", flush=True)
+                            else:
+                                print(f"[LID RESOLVER] Error obteniendo agenda completa: status={r2.status}", flush=True)
+                    else:
+                        print(f"[LID RESOLVER] Error buscando contacto LID: status={r1.status}", flush=True)
+        except Exception as e:
+            print(f"[LID RESOLVER] Excepción durante resolución: {type(e).__name__}: {e}", flush=True)
+            
+        # Fallback por defecto si todo lo demás falla
         return lid
+
 
 
 
