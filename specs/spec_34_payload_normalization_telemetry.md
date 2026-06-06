@@ -42,10 +42,18 @@ remoteJid=37598781259882@lid
 - **Acción:** Eliminar esa línea. Los `safety_settings` se mantienen.
 - **Criterio de éxito:** Los logs deben mostrar `[Gemini]` respondiendo sin `INVALID_ARGUMENT`.
 
-### TAREA B — Mejorar resolución de LID (Post-estabilización)
-- **Archivo:** `api/services/wa_client.py`
-- **Acción:** Agregar llamada al endpoint `GET /chat/findContacts/{instance}?where[id]=<lid>` de Evolution API como primera estrategia de resolución.
-- **Criterio de éxito:** El log debe mostrar el LID resuelto a un JID tipo `551199...@s.whatsapp.net`.
+### TAREA B — Mejorar resolución de LID (BLOQUEANTE — produce sender_id incorrecto en Supabase)
+- **Archivo:** `api/services/wa_client.py` → método `resolve_lid`
+- **Problema actual:** El método llama a `/chat/findContacts` y busca coincidencias de `pushName` o `profilePicUrl`. Si el contacto no tiene esos datos, devuelve el LID sin cambios. Supabase termina registrando al usuario con `phone_number = 37598781259882@lid`.
+- **Investigación realizada:**
+  - Según la documentación oficial de Evolution API v2 y casos confirmados en GitHub/Reddit, el endpoint `POST /profile/fetchProfile/{instance}` acepta un `remoteJid` (incluyendo el `@lid`) y devuelve el perfil del contacto con el número de teléfono real.
+  - Alternativa: `POST /chat/findContacts/{instance}` con `where: {id: "<lid>"}` filtra directamente por ese LID y puede devolver el JID real si Evolution API lo tiene en caché.
+  - La clave del payload que contiene el número real varía: puede ser `wuid`, `id`, `remoteJid`, o `phone`. Hay que loggear la respuesta real para confirmarlo en producción.
+- **Estrategia de implementación (3 capas de fallback):**
+  1. **Capa 1:** Consultar `/chat/findContacts` con `where: {id: lid}` — si devuelve un contacto con JID real, usarlo.
+  2. **Capa 2:** Consultar `/profile/fetchProfile` con el LID — extraer número del campo `wuid` o `phone`.
+  3. **Capa 3 (fallback):** Si ambos fallan, loggear en `orus_logs` con evento `LID_UNRESOLVED` y continuar con el LID (para no bloquear el flujo). La respuesta llegará al LID (WhatsApp la enruta internamente), aunque Supabase quedará con registro LID.
+- **Criterio de éxito:** El log debe mostrar `[LID RESOLVER] <lid> resuelto a 5491199...@s.whatsapp.net` y Supabase debe registrar el número real.
 
 ### TAREA C — Dashboard de Alertas (Futura)
 - Sección "System Health" en el Dashboard React consultando `orus_logs` para eventos `CRITICAL_PAYLOAD_ANOMALY` y `EVOLUTION_CONNECTION_UPDATE`.
@@ -60,4 +68,6 @@ remoteJid=37598781259882@lid
 | 965a3ba | Docs: Spec 33 actualizado | ✅ OK |
 | f26dd2d | Normalizador + try/except global | ✅ OK (pero indentación mala) |
 | 4a183f7 | Fix: indentación corregida | ✅ OK |
-| Pendiente | Eliminar `response_mime_type` | 🔧 En progreso |
+| aecc09f | fix(tarea-A): Eliminar response_mime_type | ✅ OK — Gemini responde |
+| Pendiente | Tarea B: Mejorar resolve_lid con 3 capas | 🔧 En progreso |
+

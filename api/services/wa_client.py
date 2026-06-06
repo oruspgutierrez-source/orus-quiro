@@ -23,50 +23,96 @@ class WhatsAppClient:
 
     async def resolve_lid(self, lid: str) -> str:
         """
-        Resuelve un identificador @lid a un número @s.whatsapp.net buscando en los contactos
-        las coincidencias de pushName o profilePicUrl.
+        Resuelve un identificador @lid a un número @s.whatsapp.net.
+        Estrategia de 3 capas de fallback (Spec 34 - Tarea B):
+          Capa 1: POST /chat/findContacts con where:{id: lid} — búsqueda directa por LID.
+          Capa 2: POST /profile/fetchProfile — extrae número real del campo wuid/phone.
+          Capa 3: Fallback — loggea LID_UNRESOLVED en orus_logs y continúa con el LID original.
         """
         if not lid or not lid.endswith("@lid"):
             return lid
-            
+
         if lid in self._lid_cache:
             return self._lid_cache[lid]
-            
-        endpoint = f"{self.api_url}/chat/findContacts/{self.instance_name}"
-        
+
+        headers = self._get_headers()
+
         async with aiohttp.ClientSession() as session:
+
+            # ── CAPA 1: findContacts filtrando por el LID exacto ──────────────
             try:
-                async with session.post(endpoint, json={"where": {}}, headers=self._get_headers(), ssl=False) as response:
-                    if response.status == 200:
-                        contacts = await response.json()
-                        lid_contact = None
-                        for c in contacts:
-                            if c.get("remoteJid") == lid:
-                                lid_contact = c
-                                break
-                        
-                        if not lid_contact:
-                            return lid
-                            
-                        target_name = lid_contact.get("pushName")
-                        target_pic = lid_contact.get("profilePicUrl")
-                        
-                        for c in contacts:
-                            if c.get("remoteJid", "").endswith("@s.whatsapp.net"):
-                                if target_name and c.get("pushName") == target_name:
-                                    real_jid = c.get("remoteJid")
-                                    self._lid_cache[lid] = real_jid
-                                    print(f"[LID RESOLVER] {lid} resuelto a {real_jid} por pushName")
-                                    return real_jid
-                                elif target_pic and c.get("profilePicUrl") == target_pic:
-                                    real_jid = c.get("remoteJid")
-                                    self._lid_cache[lid] = real_jid
-                                    print(f"[LID RESOLVER] {lid} resuelto a {real_jid} por profilePicUrl")
-                                    return real_jid
+                endpoint_1 = f"{self.api_url}/chat/findContacts/{self.instance_name}"
+                async with session.post(
+                    endpoint_1,
+                    json={"where": {"id": lid}},
+                    headers=headers,
+                    ssl=False,
+                    timeout=aiohttp.ClientTimeout(total=8)
+                ) as r1:
+                    if r1.status == 200:
+                        contacts = await r1.json()
+                        # Puede devolver lista o dict
+                        if isinstance(contacts, dict):
+                            contacts = [contacts]
+                        for c in (contacts or []):
+                            # Buscar un remoteJid que NO sea @lid
+                            remote = c.get("remoteJid", "") or c.get("id", "")
+                            if remote and not remote.endswith("@lid") and ("@s.whatsapp.net" in remote or "@c.us" in remote):
+                                self._lid_cache[lid] = remote
+                                print(f"[LID RESOLVER C1] {lid} → {remote}", flush=True)
+                                return remote
+                        print(f"[LID RESOLVER C1] Sin JID real en respuesta. Keys={[list(c.keys()) for c in (contacts or [])]}", flush=True)
+                    else:
+                        body = await r1.text()
+                        print(f"[LID RESOLVER C1] status={r1.status} body={body[:200]}", flush=True)
             except Exception as e:
-                print(f"Error resolviendo LID {lid}: {e}")
-                
+                print(f"[LID RESOLVER C1] Error: {e}", flush=True)
+
+            # ── CAPA 2: fetchProfile con el LID ───────────────────────────────
+            try:
+                endpoint_2 = f"{self.api_url}/profile/fetchProfile/{self.instance_name}"
+                async with session.post(
+                    endpoint_2,
+                    json={"number": lid},
+                    headers=headers,
+                    ssl=False,
+                    timeout=aiohttp.ClientTimeout(total=8)
+                ) as r2:
+                    if r2.status == 200:
+                        profile = await r2.json()
+                        print(f"[LID RESOLVER C2] Respuesta keys={list(profile.keys()) if isinstance(profile, dict) else type(profile)}", flush=True)
+                        # El número real puede estar en distintos campos según versión de Evolution API
+                        for field in ("wuid", "phone", "remoteJid", "id", "jid"):
+                            candidate = profile.get(field, "") if isinstance(profile, dict) else ""
+                            if candidate and not candidate.endswith("@lid"):
+                                # Normalizar a formato JID si solo viene el número
+                                if "@" not in candidate:
+                                    candidate = f"{candidate}@s.whatsapp.net"
+                                self._lid_cache[lid] = candidate
+                                print(f"[LID RESOLVER C2] {lid} → {candidate} (campo={field})", flush=True)
+                                return candidate
+                    else:
+                        body = await r2.text()
+                        print(f"[LID RESOLVER C2] status={r2.status} body={body[:200]}", flush=True)
+            except Exception as e:
+                print(f"[LID RESOLVER C2] Error: {e}", flush=True)
+
+        # ── CAPA 3: Fallback — loggear y continuar ────────────────────────────
+        print(f"[LID RESOLVER C3] FALLBACK — LID sin resolver: {lid}", flush=True)
+        try:
+            from api.db.supabase_client import supabase
+            supabase.table('orus_logs').insert({
+                'event_type': 'LID_UNRESOLVED',
+                'severity': 'WARNING',
+                'error_message': f"No se pudo resolver el LID {lid} a un JID real",
+                'source_identifier': lid,
+                'stack_trace': 'Capa1 findContacts y Capa2 fetchProfile fallaron. Se procede con LID.'
+            }).execute()
+        except Exception as db_e:
+            print(f"[LID RESOLVER C3] Error al loggear: {db_e}", flush=True)
+
         return lid
+
 
     async def download_media(self, message_key: dict, message_obj: dict) -> bytes | None:
         """
