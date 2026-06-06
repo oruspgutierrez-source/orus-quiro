@@ -194,7 +194,6 @@ ESTRUCTURA DEL JSON:
         config = types.GenerateContentConfig(
             system_instruction=system_rules,
             tools=tools,
-            response_mime_type="application/json",
             safety_settings=[
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,

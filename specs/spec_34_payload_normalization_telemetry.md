@@ -1,41 +1,63 @@
 # Spec 34: Telemetría de Alta Resiliencia y Normalización de Payloads (Evolution API)
 
-**Estado:** Planeado
+**Estado:** En Progreso
 **Fecha:** Junio 2026
 
-## 1. Problema: Mutaciones de Payload en Webhooks
-Durante eventos de reinicio, actualizaciones menores de Evolution API, o cambios en la configuración de la instancia (ej. de WhatsApp Business a Personal, o activación de variables como `WPP_LID_MODE`), la estructura del paquete de datos (payload) que Evolution API envía a nuestro Webhook puede sufrir mutaciones.
+---
 
-**Estructuras observadas:**
-1. **Objeto Directo:** `{"data": {"key": {"remoteJid": "..."}, "message": {...}}}`
-2. **Lista Empaquetada (Actual):** `{"data": [{"key": {"remoteJid": "..."}, "message": {...}}]}`
-3. **Wrapper de Eventos:** `{"event": "messages.upsert", "data": ...}`
+## 1. Errores Confirmados en Logs de Producción (2026-06-06)
 
-Si el backend espera la estructura 1 y recibe la estructura 2, se produce un colapso (`Error 500: AttributeError`), perdiendo el mensaje del cliente en el vacío.
+### Error A — `INVALID_ARGUMENT` en Gemini
+**Log observado:**
+```
+Error en Gemini API: 400 INVALID_ARGUMENT.
+'Function calling with a response mime type: application/json is unsupported'
+```
+**Causa:** En el commit `070ec07` se inyectó `response_mime_type="application/json"` en `GenerateContentConfig` junto con `tools=[...]`. La API de Gemini NO permite usar `response_mime_type` cuando se tienen `tools` activos (function calling). Son mutuamente excluyentes según la documentación oficial de Google GenAI SDK.
+**Referencia:** https://ai.google.dev/gemini-api/docs/function-calling
 
-## 2. Plan de Acción y Solución
+**Tarea A:** Eliminar `response_mime_type` de `GenerateContentConfig` en `gemini_client.py`. Mantener los `safety_settings` con `BLOCK_NONE` (eso sí es compatible con tools).
 
-Para que el sistema sea inmune a estas variaciones y tengamos visibilidad inmediata en el Dashboard, implementaremos tres capas de blindaje:
+---
 
-### Capa 1: Normalizador de Payloads (Extractor Recursivo)
-En lugar de buscar rutas exactas (ej. `payload["data"][0]["key"]`), crearemos una función inteligente llamada `normalize_evolution_payload(payload)` que:
-- Detecte si el objeto es una lista o un diccionario de forma segura.
-- Realice una búsqueda recursiva de los nodos críticos: `key`, `message`, `pushName`, `messageTimestamp`.
-- Devuelva un objeto estandarizado a nuestro `message_processor.py`, sin importar dónde o cómo escondió Evolution API los datos.
+### Error B — LID sin resolver (`@lid`)
+**Log observado:**
+```
+remoteJid=37598781259882@lid
+[Webhook] ADVERTENCIA: No se pudo resolver el LID 37598781259882@lid
+[Buffer] 37598781259882@lid: +1 msg (total=1)
+```
+**Causa:** La variable `WPP_LID_MODE=false` no está siendo respetada por Evolution API para este número específico. El método `resolve_lid` en `wa_client.py` intenta resolver por `pushName` o `profilePicUrl`, pero al ser un contacto sin foto de perfil o pushName conocido, la resolución falla. El mensaje se procesa igual, pero el `sender_id` queda como LID, lo que puede causar que el bot responda a un ID que WhatsApp no pueda enrutar.
+**Estado:** Abierto. El mensaje llega al buffer y a Gemini (con el error A ya bloqueaba), pero el sender_id es incorrecto.
 
-### Capa 2: Sandbox de Respaldo y Alarma (Telegram + Supabase)
-Si la Capa 1 encuentra un payload completamente irreconocible (ej. cambiaron el nombre de todas las variables):
-1. **No crashea (No Error 500).** Atrapa el error con un `try/except` global.
-2. Extrae las claves (keys) del payload desconocido para entender su topología.
-3. Lo guarda intacto en Supabase (`orus_logs`) bajo una nueva severidad: `CRITICAL_PAYLOAD_ANOMALY`.
-4. Dispara instantáneamente una alarma a nuestro Telegram Bot: *"🚨 Alerta de Mutación de Payload. Estructura recibida: [key1, key2]. Revisa el Dashboard."*
+**Tarea B (futura, tras resolver A):** Mejorar `resolve_lid` para intentar resolución via endpoint `/chat/findContacts` de Evolution API antes del fallback, y loggear en `orus_logs` cuando un LID queda sin resolver.
 
-### Capa 3: Interfaz de Alertas en el Dashboard
-El panel de control (Dashboard React) deberá incluir una sección visible llamada "System Health" o "Alertas de Infraestructura" que consulte la tabla `orus_logs` buscando eventos de `CRITICAL_PAYLOAD_ANOMALY` o fallos de `connection.update`. Así, si algo cambia, lo veremos antes de que un cliente note que el bot no responde.
+---
 
-## 3. Implementación a Realizar
-- Modificar `api/routes/webhooks.py` aislando el parsing en un método `extract_message_data(payload)`.
-- Envolver `receive_webhook` en un `try...except Exception as e` absoluto.
-- Conectar este `except` con `supabase_client.log_error()` y `telegram_client.send_telegram_alert()`.
+## 2. Plan de Acción por Tareas
 
-Con este ecosistema, cualquier futura mutación de la API no será un error silencioso, sino un evento controlado, registrado y reportado de inmediato.
+### TAREA A — Quitar `response_mime_type` de Gemini (BLOQUEANTE)
+- **Archivo:** `api/services/gemini_client.py`
+- **Línea objetivo:** `response_mime_type="application/json"` dentro de `GenerateContentConfig`
+- **Acción:** Eliminar esa línea. Los `safety_settings` se mantienen.
+- **Criterio de éxito:** Los logs deben mostrar `[Gemini]` respondiendo sin `INVALID_ARGUMENT`.
+
+### TAREA B — Mejorar resolución de LID (Post-estabilización)
+- **Archivo:** `api/services/wa_client.py`
+- **Acción:** Agregar llamada al endpoint `GET /chat/findContacts/{instance}?where[id]=<lid>` de Evolution API como primera estrategia de resolución.
+- **Criterio de éxito:** El log debe mostrar el LID resuelto a un JID tipo `551199...@s.whatsapp.net`.
+
+### TAREA C — Dashboard de Alertas (Futura)
+- Sección "System Health" en el Dashboard React consultando `orus_logs` para eventos `CRITICAL_PAYLOAD_ANOMALY` y `EVOLUTION_CONNECTION_UPDATE`.
+
+---
+
+## 3. Historial de Cambios
+| Commit | Descripción | Estado |
+|--------|-------------|--------|
+| 5e5719b | Hotfix list-payload + telemetría Telegram | ✅ OK |
+| 070ec07 | Safety BLOCK_NONE + `response_mime_type` | ❌ Rompió Gemini |
+| 965a3ba | Docs: Spec 33 actualizado | ✅ OK |
+| f26dd2d | Normalizador + try/except global | ✅ OK (pero indentación mala) |
+| 4a183f7 | Fix: indentación corregida | ✅ OK |
+| Pendiente | Eliminar `response_mime_type` | 🔧 En progreso |
