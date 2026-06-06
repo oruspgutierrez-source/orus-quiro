@@ -47,3 +47,26 @@ Para solucionar el bucle criptográfico y aplicar la configuración anti-LID, ej
 ## 3. Siguientes Pasos
 - Proceder con la destrucción de la sesión actual en EasyPanel y la configuración de `WPP_LID_MODE=false`.
 - Actualizar el parser de LIDs en `wa_client.py` en caso de que aún se filtren LIDs residuales.
+
+### Tarea 4: Telemetría de Errores y Blindaje de Recepción (Completada)
+**Objetivo:** Capturar desconexiones criptográficas de WhatsApp y errores de parsing provocados por cambios en la API de Evolution v2, reportando todo vía Telegram.
+**Ejecución:**
+- Modificado `api/routes/webhooks.py` para escuchar eventos `connection.update` y disparar alarmas en Telegram si el `state` es distinto a `open` o `connecting`.
+- **Hotfix (List Payload):** La versión actual de Evolution API v2 ocasionalmente envía el payload de `data` como una lista (`[dict]`) en vez de un `dict`. Esto generaba un `AttributeError: 'list' object has no attribute 'get'` que colapsaba el servidor con error 500. Se añadió sanitización (`data_debug[0] if isinstance(data_debug, list) else data_debug`) para proteger el parser de fallas y permitir el procesamiento continuo.
+
+### Tarea 5: Bypass de Safety Settings en Gemini (Completada)
+**Objetivo:** Prevenir que Gemini genere un `[SILENT_FALLBACK]` (respuesta vacía) cuando el usuario interactúa con la venta y acepta recibir información médica simulada ("Auditoría Biosemiótica").
+**Ejecución:**
+- **Contexto:** El uso de términos como "diagnóstico", "hardware biológico" o "neuroanatomía" activaba los filtros nativos de protección médica/daño de la API de Gemini (generando un `finish_reason=SAFETY` y texto vacío).
+- Modificado `api/services/gemini_client.py` para inyectar `types.SafetySetting` con `BLOCK_NONE` en todas las categorías, desactivando la censura nativa.
+- Se forzó estructuralmente la respuesta en JSON usando `response_mime_type="application/json"` en `GenerateContentConfig` para garantizar la estabilidad de la extracción del campo `reply`.
+- Añadido log detallado de `finish_reason` si llegara a repetirse.
+
+---
+## Criterios de Éxito (Actualizados)
+- [x] Variable `WPP_LID_MODE=false` inyectada en EasyPanel.
+- [x] Instancia recreada y vinculada limpiamente (nuevo nombre: `orusboth`).
+- [x] Telegram recibe alarmas asíncronas si ocurre un fallo de conexión.
+- [x] El webhook soporta payloads en formato `list` de Evolution v2 para evitar errores 500.
+- [x] Gemini no bloquea respuestas por falsos positivos médicos (Safety = BLOCK_NONE).
+- [ ] Flujo End-to-End validado en celular personal sin errores `[SILENT_FALLBACK]`.
