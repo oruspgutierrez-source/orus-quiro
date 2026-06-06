@@ -18,16 +18,18 @@
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Último Estado:** Infraestructura en Producción — **Spec 31 Activo**. [NOTA DE CORRECCIÓN: El sistema antiguo tenía el Dashboard en Vercel. AHORA el Dashboard está en la VPS (EasyPanel). Lo único en Vercel es la app de recolección de material biométrico.]
+> **Último Estado:** Infraestructura en Producción — **Spec 33 Completado**. [NOTA DE CORRECCIÓN: El Dashboard está en la VPS (EasyPanel). Lo único en Vercel es la app de recolección de material biométrico.]
 > - **El flujo completo ya está cargado y operando en la VPS.**
 > - **Backend y Dashboard** están alojados en la VPS mediante EasyPanel.
-> - **App de Recolección de Datos Biométricos** está alojada en Vercel. El link de esta app se utiliza en el flujo de WhatsApp y se envía por el chat.
-> - **Inbox Multimodal y Notas de Sesión:** La integración de Google Calendar, Inbox Chat (con soporte de base64 para imágenes y audios) y System Logs ya operan contra Supabase y la API de producción.
->
-> **Pendientes próximos (Spec 31):**
-> - Estabilización de la bandeja de entrada multimodal.
-> - Pruebas en el entorno de producción (ej. el usuario enviando mensajes desde un celular alterno para verificar todo el flujo y recolección biométrica).
-> - Corrección de cualquier bug detectado en la VPS o Dashboard.
+> - **App de Datos Biométricos** está alojada en Vercel.
+> - **Deduplicación y Routing:** Corriendo en producción con 1 worker de uvicorn para garantizar la deduplicación de mensajes. Routing de LIDs corregido.
+
+> [!NOTE]
+> **RUTA PARA LA SIGUIENTE SESIÓN (PROCESO DE AFINACIÓN):**
+> Al iniciar la siguiente sesión, se debe seguir un riguroso proceso de afinación:
+> 1. **Medir el estrés del sistema:** Realizar pruebas de carga y respuesta rápida directamente desde la interfaz del chat del Dashboard.
+> 2. **Simular intervenciones manuales:** Alternar entre los modos `HUMAN` y `AI` para estresar los timers de debounce.
+> 3. **Coordinar el flujo con el bot:** Probar exhaustivamente el retorno automático del bot a modo `AI` con instrucciones contextuales (`[SYSTEM_NOTE]`) sin generar alucinaciones ni reprocesar material antiguo.
 
 ---
 
