@@ -10,6 +10,48 @@ _seen_messages: dict[str, bool] = {}
 _MAX_SEEN = 10000  # Evitar crecimiento infinito
 
 
+def _recursive_find(data, target_key):
+    """Busca recursivamente una llave en un diccionario o lista anidada."""
+    if isinstance(data, dict):
+        if target_key in data:
+            return data[target_key]
+        for v in data.values():
+            result = _recursive_find(v, target_key)
+            if result is not None:
+                return result
+    elif isinstance(data, list):
+        for item in data:
+            result = _recursive_find(item, target_key)
+            if result is not None:
+                return result
+    return None
+
+def normalize_evolution_payload(payload: dict) -> tuple[str, dict]:
+    """
+    Intenta extraer el 'event', 'data', 'key' y 'message' sin importar 
+    si Evolution API los empaquetó en una lista o un objeto directo.
+    """
+    event_type = payload.get("event", "UNKNOWN")
+    
+    # Extraer data (puede ser lista o dict)
+    raw_data = payload.get("data", {})
+    if isinstance(raw_data, list) and len(raw_data) > 0:
+        data_node = raw_data[0]
+    elif isinstance(raw_data, dict):
+        data_node = raw_data
+    else:
+        data_node = {}
+
+    # Si aún así no tiene 'key' ni 'message', buscar recursivamente (por si la estructura mutó fuerte)
+    if "key" not in data_node and "message" not in data_node:
+        found_key = _recursive_find(payload, "key")
+        found_message = _recursive_find(payload, "message")
+        if found_key and found_message:
+            data_node = {"key": found_key, "message": found_message}
+            
+    return event_type, data_node
+
+
 @router.post("/webhook")
 async def receive_webhook(request: Request, token: str = Query(None)):
     """
@@ -28,19 +70,14 @@ async def receive_webhook(request: Request, token: str = Query(None)):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    event_type = payload.get("event")
+    try:
+        # Usamos el normalizador blindado
+        event_type, data_debug = normalize_evolution_payload(payload)
 
-    # DEBUG TEMPORAL — ver qué llega al webhook
-    data_debug = payload.get("data", {})
-    
-    # Evolution API v2 sometimes sends data as a list
-    if isinstance(data_debug, list):
-        data_debug = data_debug[0] if len(data_debug) > 0 else {}
-        
-    key_debug = data_debug.get("key", {})
-    msg_debug = data_debug.get("message", {})
-    msg_keys = list(msg_debug.keys()) if isinstance(msg_debug, dict) else str(type(msg_debug))
-    print(f"[DEBUG WEBHOOK] event={event_type}, fromMe={key_debug.get('fromMe')}, remoteJid={key_debug.get('remoteJid', 'N/A')}, msg_keys={msg_keys}", flush=True)
+        key_debug = data_debug.get("key", {})
+        msg_debug = data_debug.get("message", {})
+        msg_keys = list(msg_debug.keys()) if isinstance(msg_debug, dict) else str(type(msg_debug))
+        print(f"[DEBUG WEBHOOK] event={event_type}, fromMe={key_debug.get('fromMe')}, remoteJid={key_debug.get('remoteJid', 'N/A')}, msg_keys={msg_keys}", flush=True)
 
     # ── DEBUG MEDIA TEMPORAL — Captura completa de payloads multimedia ──
     if event_type == "messages.upsert":
@@ -183,6 +220,44 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         await buffer_message(sender_id, text_body, media_info, payload)
         media_label = f" + {media_info['type']}" if media_info else ""
         print(f"[Webhook] Mensaje de {sender_id} bufferizado{media_label}", flush=True)
+
+    except Exception as general_exc:
+        # [Task 34] Blindaje y Telemetría: Si el payload mutó y crasheó, lo atrapamos
+        import traceback
+        import asyncio
+        from api.db.supabase_client import supabase
+        from api.services.telegram_client import send_telegram_alert
+        
+        stack = traceback.format_exc()
+        print(f"[CRITICAL_PAYLOAD_ANOMALY] Error procesando webhook:\n{stack}", flush=True)
+        
+        try:
+            # Guardamos el payload crudo en DB para inspección
+            payload_str = json.dumps(payload) if 'payload' in locals() else "UNKNOWN_PAYLOAD"
+            keys_preview = list(payload.keys()) if 'payload' in locals() and isinstance(payload, dict) else "N/A"
+            
+            supabase.table('orus_logs').insert({
+                'event_type': 'CRITICAL_PAYLOAD_ANOMALY',
+                'severity': 'ERROR',
+                'error_message': f"Fallo al normalizar Payload. Exception: {str(general_exc)}",
+                'source_identifier': 'Evolution API Webhook',
+                'stack_trace': f"Keys encontradas: {keys_preview}\n{stack}\n\nRAW PAYLOAD:\n{payload_str[:2000]}"
+            }).execute()
+            
+            # Alarma en Telegram
+            alert_msg = (
+                f"🚨 *ALERTA DE MUTACIÓN DE PAYLOAD* 🚨\n"
+                f"Evolution API ha enviado una estructura desconocida o ha ocurrido un fallo grave.\n"
+                f"*Keys:* `{keys_preview}`\n"
+                f"*Error:* `{str(general_exc)}`\n"
+                f"Revisa la tabla `orus_logs` en el Dashboard para ver el payload intacto."
+            )
+            asyncio.create_task(send_telegram_alert(alert_msg))
+        except Exception as db_exc:
+            print(f"[ERROR_EN_ALERTA] No se pudo guardar el log de anomalía: {db_exc}", flush=True)
+            
+        # Devolvemos 200 OK de todas formas a Evolution API para evitar que reintente infinitamente
+        return {"status": "anomaly_handled_silently"}
 
     return {"status": "ok"}
 
