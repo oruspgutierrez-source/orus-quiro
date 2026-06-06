@@ -63,13 +63,25 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         
         try:
             from api.db.supabase_client import supabase
+            from api.services.telegram_client import send_telegram_alert
+            
+            error_msg = f"WhatsApp Connection: {state.upper()}"
+            stack_trace = f"State: {state}\nReason: {reason}\nPayload: {json.dumps(data_debug)}"
+            
             supabase.table('orus_logs').insert({
                 'event_type': 'EVOLUTION_CONNECTION_UPDATE',
                 'severity': severity,
-                'error_message': f"WhatsApp Connection: {state.upper()}",
+                'error_message': error_msg,
                 'source_identifier': 'Evolution API',
-                'stack_trace': f"State: {state}\nReason: {reason}\nPayload: {json.dumps(data_debug)}"
+                'stack_trace': stack_trace
             }).execute()
+            
+            if severity == 'ERROR':
+                alert_text = f"🚨 *ALERTA CRÍTICA ORUS* 🚨\nFalla en Evolution API:\n*Estado:* {state}\n*Razón:* {reason}\n*Acción:* Revisa el celular o la instancia de EasyPanel de inmediato."
+                import asyncio
+                # El webhook es async, podemos enviarlo directo
+                asyncio.create_task(send_telegram_alert(alert_text))
+                
         except Exception as e:
             print(f"Error logging connection update: {e}", flush=True)
             
