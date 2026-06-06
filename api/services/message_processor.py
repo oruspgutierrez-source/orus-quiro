@@ -220,10 +220,10 @@ async def _process_buffer(sender_id: str, payload: dict):
     print(f"[Processor] Procesando {len(buffer_items)} item(s) de {sender_id}{media_label}:\n{text_body}", flush=True)
 
     try:
-        # ── 1. Resolver LID ────────────────────────────────────────────────────
-        real_sender_id = await wa_client.resolve_lid(sender_id)
-        if not real_sender_id:
-            real_sender_id = sender_id
+        # ── 1. Usar sender_id directo (ya resuelto en webhook, o LID que WA enruta OK) ─
+        # [Spec 34-B2] resolve_lid via /chat/findContacts devuelve números INCORRECTOS.
+        # La resolución LID→JID ocurre en webhooks.py desde la tabla _lid_to_jid.
+        real_sender_id = sender_id
 
         # ── 2. Persistir payload ───────────────────────────────────────────────
         try:

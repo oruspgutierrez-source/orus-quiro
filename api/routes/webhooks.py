@@ -105,6 +105,9 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         # [Spec 34 - Tarea B2] contacts.update: capturar el mapeo LID → JID real
         if event_type == "contacts.update":
             raw = payload.get("data", [])
+            # DIAGNÓSTICO: loggear estructura raw para ver campos reales
+            print(f"[LID MAP DEBUG] contacts.update payload.keys={list(payload.keys())}", flush=True)
+            print(f"[LID MAP DEBUG] contacts.update data={json.dumps(raw, default=str)[:500]}", flush=True)
             items = raw if isinstance(raw, list) else [raw]
             for contact in items:
                 if not isinstance(contact, dict):
@@ -124,6 +127,7 @@ async def receive_webhook(request: Request, token: str = Query(None)):
                     _lid_to_jid[lid] = phone_raw
                     print(f"[LID MAP] contacts.update: {lid} → {phone_raw}", flush=True)
             return {"status": "ok"}
+
 
         if event_type == "connection.update":
             state = data_debug.get("state", "UNKNOWN")
