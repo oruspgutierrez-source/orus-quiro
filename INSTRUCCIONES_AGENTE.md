@@ -10,20 +10,22 @@
 > - Task completada -> solo escribe: *"Task #X completada con exito."* o *"Ya complete la tarea."*
 > - Si el usuario pide un ajuste -> NO repitas lo que pidió ni le expliques el proceso. Solo di que está completado, EXCEPTO si tomaste una decisión técnica extra que necesite saber.
 > - Error encontrado -> solo escribe: *"Error registrado con su correccion en [archivo]."*
-> - **Cero texto de relleno. Cero explicaciones de proceso. Solo el resultado.**
+> - **Cero texto de relleno. Cero explicaciones de proceso. Solo el resultado.** (Si olvidas esto, estás rompiendo el flujo).
+> - **Protocolo de Logs (SSH) OBLIGATORIO:** Tienes la llave de acceso SSH configurada a la VPS (`root@217.196.61.72`). Ante CUALQUIER error, **ESTÁ PROHIBIDO adivinar o proponer parches a ciegas**. Debes conectarte por SSH, extraer logs reales (ej. `docker logs de9751781d7d`) y consultar Supabase antes de tocar una sola línea de código.
 
 ---
 
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Último Estado:** Infraestructura en Producción (VPS y Vercel).
+> **Último Estado:** Infraestructura en Producción — **Spec 31 Activo**. [NOTA DE CORRECCIÓN: El sistema antiguo tenía el Dashboard en Vercel. AHORA el Dashboard está en la VPS (EasyPanel). Lo único en Vercel es la app de recolección de material biométrico.]
 > - **El flujo completo ya está cargado y operando en la VPS.**
 > - **Backend y Dashboard** están alojados en la VPS mediante EasyPanel.
 > - **App de Recolección de Datos Biométricos** está alojada en Vercel. El link de esta app se utiliza en el flujo de WhatsApp y se envía por el chat.
-> - La integración de Google Calendar, Inbox Chat (Handover manual) y System Logs ya operan contra Supabase y la API de producción.
+> - **Inbox Multimodal y Notas de Sesión:** La integración de Google Calendar, Inbox Chat (con soporte de base64 para imágenes y audios) y System Logs ya operan contra Supabase y la API de producción.
 >
-> **Pendientes próxima sesión:**
+> **Pendientes próximos (Spec 31):**
+> - Estabilización de la bandeja de entrada multimodal.
 > - Pruebas en el entorno de producción (ej. el usuario enviando mensajes desde un celular alterno para verificar todo el flujo y recolección biométrica).
 > - Corrección de cualquier bug detectado en la VPS o Dashboard.
 
@@ -32,7 +34,7 @@
 ## 2. INFRAESTRUCTURA Y DESPLIEGUE (PRODUCCIÓN)
 
 > [!IMPORTANT]
-> **YA NO SE LEVANTAN SERVIDORES LOCALES (ni Uvicorn ni ngrok).** El agente ya no necesita iniciar la secuencia de comandos de terminal locales. Todo corre en la VPS y Vercel.
+> **YA NO SE LEVANTAN SERVIDORES LOCALES (ni Uvicorn ni ngrok).** El agente ya no necesita iniciar la secuencia de comandos de terminal locales. Todo corre en la VPS (EasyPanel aloja Backend y Dashboard) y Vercel (SOLO la app Biométrica).
 
 ### Distribución de Servicios:
 - **Backend (FastAPI)**: VPS (EasyPanel) -> `https://api.orusquiroterapia.online`
@@ -43,9 +45,19 @@
 ### Flujo de Actualización:
 Para aplicar cambios en el código al Backend o Dashboard:
 1. Hacer `git commit` y `git push` a la rama `main` de GitHub.
-2. (El despliegue se actualiza desde EasyPanel al hacer Deploy de los últimos commits).
+2. **Desencadenar el Deploy Programáticamente**: Puedes disparar el despliegue automático desde la VPS (dentro de SSH) haciendo un curl POST al webhook interno de EasyPanel (no es necesario usar el navegador):
+   - **Backend (`orus-backend`)**:
+     ```bash
+     ssh root@217.196.61.72 'curl -X POST "http://localhost:3000/api/deploy/3708f141a74cfb80ca83528659f5148ca13e0adf4f6f3074"'
+     ```
+   - **Dashboard (`orus-dashboard`)**:
+     ```bash
+     ssh root@217.196.61.72 'curl -X POST "http://localhost:3000/api/deploy/de486e98ab2722590a5265df777bc44227f2e0e984265cb7"'
+     ```
+3. El deploy es inmediato. Monitorea los logs de compilación consultando la tabla de acciones en SQLite de EasyPanel `/etc/easypanel/data/data.sdb` o leyendo el archivo de log correspondiente en `/etc/easypanel/actions/<action_id>.log`.
 
 ---
+
 
 ## 3. DIAGNOSTICO RAPIDO EN PRODUCCION
 

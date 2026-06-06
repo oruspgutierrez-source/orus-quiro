@@ -19,5 +19,6 @@ COPY . .
 # Exponer el puerto
 EXPOSE 8000
 
-# Comando por defecto usando uvicorn con workers para producción (recomendado para balanceo de carga)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Comando por defecto usando uvicorn con 1 worker para producción (garantiza consistencia de estado de debounce y deduplicación en memoria)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+

@@ -20,3 +20,10 @@
 - **Corrección:** Se eliminó del historial de git con `git rm -r --cached` y se forzó un redespliegue de Vercel (Production) vía CLI que logró conectar exitosamente `DashboardView.jsx` a Supabase para leer la data en vivo.
 - **Error detectado 8:** El pipeline de Gemini crasheaba internamente (`Error crítico en pipeline: No module named 'googleapiclient'`) desde el contenedor de VPS, lo que se traducía en falta total de respuesta en WhatsApp.
 - **Corrección:** El archivo `requirements.txt` modificado con los módulos de Google Calendar no había sido subido a GitHub (fuente que usa EasyPanel). Se hizo commit y push del archivo `requirements.txt` y se re-desplegó exitosamente en EasyPanel.
+
+## Fecha: 2026-06-06
+- **Error detectado 9 (Routing LID en WhatsApp):** Las respuestas enviadas desde notificaciones/mensajes del dashboard a usuarios que iniciaron el chat desde anuncios/botones utilizaban el identificador cifrado `@lid`. Como Evolution API requiere el JID real (`@s.whatsapp.net`) para despachar de forma proactiva, las respuestas de WhatsApp fallaban y no llegaban al celular del destinatario, a pesar de figurar en el Dashboard.
+- **Corrección:** Se implementó un flujo de resolución en `wa_client.py` y `webhooks.py` que consulta la base de datos de Supabase o llama a la Evolution API (`/contact/findContacts`) para buscar el JID real a partir del LID cifrado antes de procesar el webhook y almacenar al usuario.
+- **Error detectado 10 (Mensajes duplicados):** Los mensajes se procesaban por duplicado o triplicado cuando provenían de dispositivos móviles reales. Esto ocurría porque `Dockerfile` iniciaba `uvicorn` con `--workers 4`, dividiendo las peticiones entre 4 procesos independientes que no compartían la memoria local (`_seen_messages`, `_debounce_timers` y `_message_buffers`).
+- **Corrección:** Se redujo el número de workers en `Dockerfile` a `--workers 1` para unificar el espacio de memoria y garantizar la efectividad del debounce y deduplicación nativos del backend.
+

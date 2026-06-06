@@ -1,20 +1,19 @@
 # Bitácora de Sesión — Orus Quiro Bot
 
-**Última actualización:** 2026-06-05 17:40 BRT
-**Estado:** Servidores Operativos en Producción | Spec 32 Completado (Handover Dinámico & Amnesia) [NOTA: El Dashboard está en la VPS/EasyPanel. Lo único en Vercel es la app Biométrica].
+**Última actualización:** 2026-06-06 12:15 BRT
+**Estado:** Servidores Operativos en Producción | Spec 33 Completado (Resolución LID & Deduplicación) [NOTA: El Dashboard está en la VPS/EasyPanel. Lo único en Vercel es la app Biométrica].
 
 ---
 
-## 🎯 Spec 32 Activo: Handover Dinámico, Inyección de Contexto y Telemetría de Errores
+## 🎯 Spec 33 Activo: Resolución de Routing LID y Deduplicación de Mensajes
 
 **Objetivos Estratégicos Acordados:**
-1. **[X] Intervención Humana Unilateral (Takeover):** El Dashboard debe permitir al admin tomar el control (`HUMAN` mode) en cualquier momento, sin esperar a que el usuario active la ruta de escalado.
-2. **[X] Handback Contextual Inteligente:** Al devolver el control al bot (`AI` mode), el bot NO debe procesar la cola de mensajes históricos (ej. imágenes/audios que el admin ya respondió) para evitar "alucinaciones" o respuestas fuera de contexto.
-3. **[X] Inyección de Prompts Internos:** El admin debe poder inyectar un "mensaje fantasma" en Supabase (ej. *"Ya evalué su radiografía, pídele los datos de reserva"*) para guiar el re-ingreso del bot.
-4. **[X] Modo Silencio post-Handback:** Al volver a `AI`, el bot corta el historial pasado. Solo actuará al procesar la nota y el siguiente mensaje, ignorando adjuntos antiguos.
-5. **[ ] Telemetría de Errores Críticos:** Capturar el evento `messages.update` de Evolution API para auditar fallos de encriptación y notificar vía Telegram/Dashboard para prevenir caídas silenciosas.
+1. **[X] Normalización de Linked IDs (@lid):** Diseñar un parser e integrador en `wa_client.py` y `webhooks.py` capaz de resolver un JID real de WhatsApp (`@s.whatsapp.net`) a partir del ID encriptado de enlace (`@lid`) consultando la base de datos de Supabase o consumiendo el endpoint `/contact/findContacts` de Evolution API.
+2. **[X] Deduplicación y Consistencia de Memoria:** Reducir la cantidad de workers de Uvicorn en `Dockerfile` de 4 a 1 para asegurar que el espacio de memoria donde residen los temporizadores de debounce y el registro de mensajes vistos (`_seen_messages`) sea consistente, erradicando los envíos duplicados hacia los celulares de los usuarios.
+3. **[X] Documentación del Flujo de Despliegue (EasyPanel Webhooks):** Registrar el flujo para desencadenar el despliegue automático del backend y el dashboard programáticamente desde SSH sin requerir la intervención manual del navegador.
 
 ---
+
 
 ## 🎯 PRÓXIMA SESIÓN: Protocolo de Hard-Reset Criptográfico y Refactorización del Routing (Spec 33)
 
