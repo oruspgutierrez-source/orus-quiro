@@ -193,7 +193,26 @@ ESTRUCTURA DEL JSON:
 
         config = types.GenerateContentConfig(
             system_instruction=system_rules,
-            tools=tools
+            tools=tools,
+            response_mime_type="application/json",
+            safety_settings=[
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                types.SafetySetting(
+                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                ),
+            ]
         )
         
         contents = []
@@ -238,10 +257,16 @@ ESTRUCTURA DEL JSON:
             function_calls = [p.function_call for p in parts if p.function_call] if parts else []
             
             if not function_calls:
-                raw_text = response.text.strip() if response.text else ""
-                
+                # Handle potential AttributeError if response.text is empty or not present
+                try:
+                    raw_text = response.text.strip() if response.text else ""
+                except Exception as e:
+                    raw_text = ""
+                    
                 # [Task 23.1] Blindaje antierosivo: usa last_executed_tool (tracker directo, sin scanning)
                 if not raw_text.strip():
+                    finish_reason = getattr(response.candidates[0], 'finish_reason', 'UNKNOWN')
+                    print(f"[Gemini] finish_reason={finish_reason}", flush=True)
                     fallback_token = "[SILENT_FALLBACK]"
                     if last_executed_tool:
                         print(f"[Gemini] Respuesta vacía tras herramienta '{last_executed_tool}'. Aplicando blindaje.", flush=True)
@@ -252,7 +277,7 @@ ESTRUCTURA DEL JSON:
                         elif last_executed_tool == "book_appointment":
                             fallback_token = "[AGENDA_COMPLETA]"
                     else:
-                        print("[Gemini] Respuesta vacía sin herramienta ejecutada. SILENT_FALLBACK.", flush=True)
+                        print(f"[Gemini] Respuesta vacía sin herramienta ejecutada (finish_reason={finish_reason}). SILENT_FALLBACK.", flush=True)
 
                     return {
                         "reply": f"{fallback_token} [##EOS##]",
