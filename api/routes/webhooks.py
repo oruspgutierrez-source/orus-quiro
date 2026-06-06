@@ -79,148 +79,148 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         msg_keys = list(msg_debug.keys()) if isinstance(msg_debug, dict) else str(type(msg_debug))
         print(f"[DEBUG WEBHOOK] event={event_type}, fromMe={key_debug.get('fromMe')}, remoteJid={key_debug.get('remoteJid', 'N/A')}, msg_keys={msg_keys}", flush=True)
 
-    # ── DEBUG MEDIA TEMPORAL — Captura completa de payloads multimedia ──
-    if event_type == "messages.upsert":
-        msg = data_debug.get("message", {})
-        media_keys = [k for k in msg.keys() if k not in ("conversation", "extendedTextMessage", "messageContextInfo")]
-        if media_keys:
-            print(f"\n{'='*60}", flush=True)
-            print(f"[DEBUG MEDIA] >>> PAYLOAD MULTIMEDIA DETECTADO <<<", flush=True)
-            print(f"[DEBUG MEDIA] Tipos: {media_keys}", flush=True)
-            for mk in media_keys:
-                content = msg[mk]
-                if isinstance(content, dict):
-                    print(f"[DEBUG MEDIA] {mk} keys: {list(content.keys())}", flush=True)
-                    # Imprimir todo EXCEPTO base64 (muy largo)
-                    preview = {k: v for k, v in content.items() if k != "base64"}
-                    print(f"[DEBUG MEDIA] {mk} data:\n{json.dumps(preview, indent=2, default=str)}", flush=True)
+        # ── DEBUG MEDIA TEMPORAL — Captura completa de payloads multimedia ──
+        if event_type == "messages.upsert":
+            msg = data_debug.get("message", {})
+            media_keys = [k for k in msg.keys() if k not in ("conversation", "extendedTextMessage", "messageContextInfo")]
+            if media_keys:
+                print(f"\n{'='*60}", flush=True)
+                print(f"[DEBUG MEDIA] >>> PAYLOAD MULTIMEDIA DETECTADO <<<", flush=True)
+                print(f"[DEBUG MEDIA] Tipos: {media_keys}", flush=True)
+                for mk in media_keys:
+                    content = msg[mk]
+                    if isinstance(content, dict):
+                        print(f"[DEBUG MEDIA] {mk} keys: {list(content.keys())}", flush=True)
+                        # Imprimir todo EXCEPTO base64 (muy largo)
+                        preview = {k: v for k, v in content.items() if k != "base64"}
+                        print(f"[DEBUG MEDIA] {mk} data:\n{json.dumps(preview, indent=2, default=str)}", flush=True)
+                    else:
+                        print(f"[DEBUG MEDIA] {mk} = {content}", flush=True)
+                print(f"{'='*60}\n", flush=True)
+    
+        if event_type == "connection.update":
+            state = data_debug.get("state", "UNKNOWN")
+            reason = data_debug.get("statusReason", "")
+            severity = 'INFO' if state in ['open', 'connecting'] else 'ERROR'
+            
+            try:
+                from api.db.supabase_client import supabase
+                from api.services.telegram_client import send_telegram_alert
+                
+                error_msg = f"WhatsApp Connection: {state.upper()}"
+                stack_trace = f"State: {state}\nReason: {reason}\nPayload: {json.dumps(data_debug)}"
+                
+                supabase.table('orus_logs').insert({
+                    'event_type': 'EVOLUTION_CONNECTION_UPDATE',
+                    'severity': severity,
+                    'error_message': error_msg,
+                    'source_identifier': 'Evolution API',
+                    'stack_trace': stack_trace
+                }).execute()
+                
+                if severity == 'ERROR':
+                    alert_text = f"🚨 *ALERTA CRÍTICA ORUS* 🚨\nFalla en Evolution API:\n*Estado:* {state}\n*Razón:* {reason}\n*Acción:* Revisa el celular o la instancia de EasyPanel de inmediato."
+                    import asyncio
+                    # El webhook es async, podemos enviarlo directo
+                    asyncio.create_task(send_telegram_alert(alert_text))
+                    
+            except Exception as e:
+                print(f"Error logging connection update: {e}", flush=True)
+                
+            return {"status": "logged"}
+    
+        if event_type == "messages.upsert":
+            data = data_debug  # Ya manejamos si era lista arriba
+            key = data.get("key", {})
+    
+            if key.get("fromMe") is True:
+                return {"status": "ignored", "reason": "fromMe=true"}
+    
+            sender_id = key.get("remoteJid", "")
+            
+            # Resolver @lid al JID real inmediatamente para todo el sistema
+            if sender_id.endswith("@lid"):
+                from api.services.wa_client import wa_client
+                real_jid = await wa_client.resolve_lid(sender_id)
+                if real_jid != sender_id:
+                    print(f"[Webhook] LID {sender_id} resuelto a {real_jid} exitosamente.", flush=True)
+                    sender_id = real_jid
                 else:
-                    print(f"[DEBUG MEDIA] {mk} = {content}", flush=True)
-            print(f"{'='*60}\n", flush=True)
-
-    if event_type == "connection.update":
-        state = data_debug.get("state", "UNKNOWN")
-        reason = data_debug.get("statusReason", "")
-        severity = 'INFO' if state in ['open', 'connecting'] else 'ERROR'
-        
-        try:
-            from api.db.supabase_client import supabase
-            from api.services.telegram_client import send_telegram_alert
-            
-            error_msg = f"WhatsApp Connection: {state.upper()}"
-            stack_trace = f"State: {state}\nReason: {reason}\nPayload: {json.dumps(data_debug)}"
-            
-            supabase.table('orus_logs').insert({
-                'event_type': 'EVOLUTION_CONNECTION_UPDATE',
-                'severity': severity,
-                'error_message': error_msg,
-                'source_identifier': 'Evolution API',
-                'stack_trace': stack_trace
-            }).execute()
-            
-            if severity == 'ERROR':
-                alert_text = f"🚨 *ALERTA CRÍTICA ORUS* 🚨\nFalla en Evolution API:\n*Estado:* {state}\n*Razón:* {reason}\n*Acción:* Revisa el celular o la instancia de EasyPanel de inmediato."
-                import asyncio
-                # El webhook es async, podemos enviarlo directo
-                asyncio.create_task(send_telegram_alert(alert_text))
-                
-        except Exception as e:
-            print(f"Error logging connection update: {e}", flush=True)
-            
-        return {"status": "logged"}
-
-    if event_type == "messages.upsert":
-        data = data_debug  # Ya manejamos si era lista arriba
-        key = data.get("key", {})
-
-        if key.get("fromMe") is True:
-            return {"status": "ignored", "reason": "fromMe=true"}
-
-        sender_id = key.get("remoteJid", "")
-        
-        # Resolver @lid al JID real inmediatamente para todo el sistema
-        if sender_id.endswith("@lid"):
-            from api.services.wa_client import wa_client
-            real_jid = await wa_client.resolve_lid(sender_id)
-            if real_jid != sender_id:
-                print(f"[Webhook] LID {sender_id} resuelto a {real_jid} exitosamente.", flush=True)
-                sender_id = real_jid
-            else:
-                print(f"[Webhook] ADVERTENCIA: No se pudo resolver el LID {sender_id}", flush=True)
-
-        participant = key.get("participant")
-        if participant and not sender_id.endswith("@g.us"):
-            sender_id = participant
-
-        # ── Tipos de media soportados ──────────────────────────────────────
-        MEDIA_TYPES = {
-            "imageMessage": "image",
-            "audioMessage": "audio",
-            "documentMessage": "document",
-            "videoMessage": "video"
-        }
-
-        message = data.get("message", {})
-        text_body = None
-        media_info = None  # Se llena si hay contenido multimedia
-
-        # 1. Intentar extraer texto plano
-        if "conversation" in message:
-            text_body = message["conversation"]
-        elif "extendedTextMessage" in message:
-            text_body = message["extendedTextMessage"].get("text")
-
-        # 2. Detectar contenido multimedia
-        for msg_key, media_type in MEDIA_TYPES.items():
-            if msg_key in message:
-                media_msg = message[msg_key]
-                caption = media_msg.get("caption")  # Puede ser None
-                mime_type = media_msg.get("mimetype", "")
-                file_name = media_msg.get("fileName")  # Solo documentMessage
-                
-                # NO descargar aquí — solo guardar metadata + message_key
-                # La descarga se hace en _process_buffer después del debounce
-                # (le da tiempo a Evolution API para almacenar el mensaje)
-                
-                # A veces Evolution API ya envía el base64 en el webhook si está configurado
-                # Puede venir en data["base64"] o message["base64"] o en media_msg
-                direct_base64 = payload.get("base64") or data.get("base64") or message.get("base64")
-                if not direct_base64 and isinstance(media_msg, dict):
-                    direct_base64 = media_msg.get("base64")
-                
-                media_info = {
-                    "type": media_type,
-                    "mime_type": mime_type.split(";")[0].strip(),
-                    "message_key": key,  # Para descargar después
-                    "message_obj": message,  # Contiene llaves criptográficas
-                    "caption": caption,
-                    "file_name": file_name,
-                    "base64": direct_base64  # Puede ser None, si lo es, se descarga
-                }
-                print(f"[Webhook] Media detectado: {media_type} ({mime_type}), caption={caption}, tiene_base64={bool(direct_base64)}", flush=True)
-                break  # Solo procesar el primer tipo de media encontrado
-
-        # Si no hay texto NI media, ignorar
-        if not text_body and not media_info:
-            print(f"[DEBUG] Mensaje sin texto ni media. msg_keys={list(message.keys())}", flush=True)
-            return {"status": "ignored", "reason": "no text or media"}
-
-        # ── Deduplicación por ID de mensaje ────────────────────────────────
-        message_id = key.get("id")
-        if message_id:
-            if message_id in _seen_messages:
-                return {"status": "ignored", "reason": "duplicate_message"}
-            # Limpiar cache si crece demasiado
-            if len(_seen_messages) > _MAX_SEEN:
-                _seen_messages.clear()
-            _seen_messages[message_id] = True
-
-        # ── Acumular y debounce ────────────────────────────────────────────
-        from api.services.message_processor import buffer_message
-        await buffer_message(sender_id, text_body, media_info, payload)
-        media_label = f" + {media_info['type']}" if media_info else ""
-        print(f"[Webhook] Mensaje de {sender_id} bufferizado{media_label}", flush=True)
-
+                    print(f"[Webhook] ADVERTENCIA: No se pudo resolver el LID {sender_id}", flush=True)
+    
+            participant = key.get("participant")
+            if participant and not sender_id.endswith("@g.us"):
+                sender_id = participant
+    
+            # ── Tipos de media soportados ──────────────────────────────────────
+            MEDIA_TYPES = {
+                "imageMessage": "image",
+                "audioMessage": "audio",
+                "documentMessage": "document",
+                "videoMessage": "video"
+            }
+    
+            message = data.get("message", {})
+            text_body = None
+            media_info = None  # Se llena si hay contenido multimedia
+    
+            # 1. Intentar extraer texto plano
+            if "conversation" in message:
+                text_body = message["conversation"]
+            elif "extendedTextMessage" in message:
+                text_body = message["extendedTextMessage"].get("text")
+    
+            # 2. Detectar contenido multimedia
+            for msg_key, media_type in MEDIA_TYPES.items():
+                if msg_key in message:
+                    media_msg = message[msg_key]
+                    caption = media_msg.get("caption")  # Puede ser None
+                    mime_type = media_msg.get("mimetype", "")
+                    file_name = media_msg.get("fileName")  # Solo documentMessage
+                    
+                    # NO descargar aquí — solo guardar metadata + message_key
+                    # La descarga se hace en _process_buffer después del debounce
+                    # (le da tiempo a Evolution API para almacenar el mensaje)
+                    
+                    # A veces Evolution API ya envía el base64 en el webhook si está configurado
+                    # Puede venir en data["base64"] o message["base64"] o en media_msg
+                    direct_base64 = payload.get("base64") or data.get("base64") or message.get("base64")
+                    if not direct_base64 and isinstance(media_msg, dict):
+                        direct_base64 = media_msg.get("base64")
+                    
+                    media_info = {
+                        "type": media_type,
+                        "mime_type": mime_type.split(";")[0].strip(),
+                        "message_key": key,  # Para descargar después
+                        "message_obj": message,  # Contiene llaves criptográficas
+                        "caption": caption,
+                        "file_name": file_name,
+                        "base64": direct_base64  # Puede ser None, si lo es, se descarga
+                    }
+                    print(f"[Webhook] Media detectado: {media_type} ({mime_type}), caption={caption}, tiene_base64={bool(direct_base64)}", flush=True)
+                    break  # Solo procesar el primer tipo de media encontrado
+    
+            # Si no hay texto NI media, ignorar
+            if not text_body and not media_info:
+                print(f"[DEBUG] Mensaje sin texto ni media. msg_keys={list(message.keys())}", flush=True)
+                return {"status": "ignored", "reason": "no text or media"}
+    
+            # ── Deduplicación por ID de mensaje ────────────────────────────────
+            message_id = key.get("id")
+            if message_id:
+                if message_id in _seen_messages:
+                    return {"status": "ignored", "reason": "duplicate_message"}
+                # Limpiar cache si crece demasiado
+                if len(_seen_messages) > _MAX_SEEN:
+                    _seen_messages.clear()
+                _seen_messages[message_id] = True
+    
+            # ── Acumular y debounce ────────────────────────────────────────────
+            from api.services.message_processor import buffer_message
+            await buffer_message(sender_id, text_body, media_info, payload)
+            media_label = f" + {media_info['type']}" if media_info else ""
+            print(f"[Webhook] Mensaje de {sender_id} bufferizado{media_label}", flush=True)
+    
     except Exception as general_exc:
         # [Task 34] Blindaje y Telemetría: Si el payload mutó y crasheó, lo atrapamos
         import traceback
