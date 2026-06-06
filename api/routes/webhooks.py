@@ -9,6 +9,10 @@ router = APIRouter()
 _seen_messages: dict[str, bool] = {}
 _MAX_SEEN = 10000  # Evitar crecimiento infinito
 
+# [Spec 34 - Tarea B2] Tabla de mapeo LID → JID real, poblada desde eventos contacts.update
+# Esta es la única fuente confiable según pruebas en producción (2026-06-06)
+_lid_to_jid: dict[str, str] = {}
+
 
 def _recursive_find(data, target_key):
     """Busca recursivamente una llave en un diccionario o lista anidada."""
@@ -98,6 +102,29 @@ async def receive_webhook(request: Request, token: str = Query(None)):
                         print(f"[DEBUG MEDIA] {mk} = {content}", flush=True)
                 print(f"{'='*60}\n", flush=True)
     
+        # [Spec 34 - Tarea B2] contacts.update: capturar el mapeo LID → JID real
+        if event_type == "contacts.update":
+            raw = payload.get("data", [])
+            items = raw if isinstance(raw, list) else [raw]
+            for contact in items:
+                if not isinstance(contact, dict):
+                    continue
+                # Evolution API envía remoteJid con el LID y phoneNumber con el número real
+                lid = contact.get("remoteJid", "")
+                phone_raw = (
+                    contact.get("phoneNumber")
+                    or contact.get("phone")
+                    or contact.get("jid")
+                    or contact.get("id", "")
+                )
+                # Solo guardar si lid es @lid y phone_raw parece un número real
+                if lid.endswith("@lid") and phone_raw and not phone_raw.endswith("@lid"):
+                    if "@" not in phone_raw:
+                        phone_raw = f"{phone_raw}@s.whatsapp.net"
+                    _lid_to_jid[lid] = phone_raw
+                    print(f"[LID MAP] contacts.update: {lid} → {phone_raw}", flush=True)
+            return {"status": "ok"}
+
         if event_type == "connection.update":
             state = data_debug.get("state", "UNKNOWN")
             reason = data_debug.get("statusReason", "")
@@ -138,15 +165,17 @@ async def receive_webhook(request: Request, token: str = Query(None)):
     
             sender_id = key.get("remoteJid", "")
             
-            # Resolver @lid al JID real inmediatamente para todo el sistema
+            # [Spec 34 - Tarea B2] Resolver @lid usando la tabla local (NUNCA via /chat/findContacts)
+            # /chat/findContacts devuelve números aleatorios de otros contactos, no el del remitente
             if sender_id.endswith("@lid"):
-                from api.services.wa_client import wa_client
-                real_jid = await wa_client.resolve_lid(sender_id)
-                if real_jid != sender_id:
-                    print(f"[Webhook] LID {sender_id} resuelto a {real_jid} exitosamente.", flush=True)
+                real_jid = _lid_to_jid.get(sender_id)
+                if real_jid:
+                    print(f"[LID MAP] {sender_id} → {real_jid} (tabla local)", flush=True)
                     sender_id = real_jid
                 else:
-                    print(f"[Webhook] ADVERTENCIA: No se pudo resolver el LID {sender_id}", flush=True)
+                    # LID sin mapear aún: usar el LID directamente (WhatsApp enruta OK)
+                    # El registro en Supabase quedará como LID hasta que llegue contacts.update
+                    print(f"[LID MAP] ADVERTENCIA: {sender_id} sin entrada en tabla. Usando LID como sender.", flush=True)
     
             participant = key.get("participant")
             if participant and not sender_id.endswith("@g.us"):

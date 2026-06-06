@@ -55,6 +55,26 @@ remoteJid=37598781259882@lid
   3. **Capa 3 (fallback):** Si ambos fallan, loggear en `orus_logs` con evento `LID_UNRESOLVED` y continuar con el LID (para no bloquear el flujo). La respuesta llegará al LID (WhatsApp la enruta internamente), aunque Supabase quedará con registro LID.
 - **Criterio de éxito:** El log debe mostrar `[LID RESOLVER] <lid> resuelto a 5491199...@s.whatsapp.net` y Supabase debe registrar el número real.
 
+### TAREA B2 — Corrección del mapeo LID incorrecto (CRÍTICO)
+**Fecha detectada:** 2026-06-06
+**Log observado:**
+```
+37598781259882@lid → 5511943231001@s.whatsapp.net  (primer intento)
+37598781259882@lid → 553799282726@s.whatsapp.net   (intentos posteriores)
+Número real del usuario: 553598869018
+```
+**Causa raíz confirmada:** El endpoint `/chat/findContacts` con `where:{id: lid}` no filtra por el LID real del contacto. Devuelve la lista completa de contactos o el primer contacto con `@s.whatsapp.net` disponible — completamente aleatorio e incorrecto. El LID `37598781259882@lid` pertenece al número real `553598869018` pero el resolver toma el número de otro contacto de la agenda del bot.
+
+**Solución correcta:** El campo `pushName` del LID está disponible en el evento `contacts.update` que Evolution API envía justo después del `messages.upsert`. Sin embargo, la mejor solución sin depender de eventos externos es **no usar `/chat/findContacts` para mapear LIDs** — ese endpoint solo es útil para buscar por nombre, no para resolución LID→JID.
+
+**La verdadera fuente del número real** en Evolution API es el evento `contacts.update` que llega dentro del mismo webhook con el campo `phoneNumber` o un JID sin sufijo `@lid`. 
+
+**Implementación correcta (Tarea B2):**
+- En el webhook, interceptar el evento `contacts.update` y construir una tabla de mapeo `LID → JID real` en memoria (o en Supabase).
+- Al recibir `messages.upsert` con `@lid`, consultar esa tabla antes de llamar a la API de Evolution.
+- Si no está en la tabla, NO intentar resolver via `/chat/findContacts` (produce resultados incorrectos). Usar el LID directamente — WhatsApp lo enruta correctamente para envío aunque para el registro en Supabase quede como LID.
+
+
 ### TAREA C — Dashboard de Alertas (Futura)
 - Sección "System Health" en el Dashboard React consultando `orus_logs` para eventos `CRITICAL_PAYLOAD_ANOMALY` y `EVOLUTION_CONNECTION_UPDATE`.
 
