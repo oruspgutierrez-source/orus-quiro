@@ -32,6 +32,11 @@ async def receive_webhook(request: Request, token: str = Query(None)):
 
     # DEBUG TEMPORAL — ver qué llega al webhook
     data_debug = payload.get("data", {})
+    
+    # Evolution API v2 sometimes sends data as a list
+    if isinstance(data_debug, list):
+        data_debug = data_debug[0] if len(data_debug) > 0 else {}
+        
     key_debug = data_debug.get("key", {})
     msg_debug = data_debug.get("message", {})
     msg_keys = list(msg_debug.keys()) if isinstance(msg_debug, dict) else str(type(msg_debug))
@@ -88,7 +93,7 @@ async def receive_webhook(request: Request, token: str = Query(None)):
         return {"status": "logged"}
 
     if event_type == "messages.upsert":
-        data = payload.get("data", {})
+        data = data_debug  # Ya manejamos si era lista arriba
         key = data.get("key", {})
 
         if key.get("fromMe") is True:
