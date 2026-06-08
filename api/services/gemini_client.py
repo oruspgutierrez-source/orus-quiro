@@ -274,6 +274,9 @@ ESTRUCTURA DEL JSON:
         max_turns = 5
         last_executed_tool = None  # Tracker robusto: se actualiza ANTES de ejecutar cada herramienta
         for _ in range(max_turns):
+            print(f"[DEBUG GEMINI] model='gemini-2.5-flash'", flush=True)
+            print(f"[DEBUG GEMINI] contents={contents}", flush=True)
+            print(f"[DEBUG GEMINI] config.tools={config.tools}", flush=True)
             response = await client.aio.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=contents,
