@@ -246,6 +246,18 @@ def book_appointment(phone_number: str, date_time: str, name: str, email: str) -
     """
     print(f"[CALENDAR TOOL] Ejecutando book_appointment({phone_number}, {date_time}, {name}, {email})")
     
+    # Programmatic firewall to prevent early booking without real user details
+    name_clean = str(name).strip().lower()
+    email_clean = str(email).strip().lower()
+    if (not name or name_clean == "" or "pendiente" in name_clean or "unknown" in name_clean or "placeholder" in name_clean or
+        not email or email_clean == "" or "pendiente" in email_clean or "unknown" in email_clean or "placeholder" in email_clean or
+        "@" not in email_clean):
+        print("[CALENDAR TOOL ERROR] book_appointment abortado: Faltan datos reales del usuario (Nombre/Email).")
+        return (
+            "ERROR: No se puede agendar la cita todavía. Faltan registrar o confirmar el Nombre completo y el Correo electrónico real del usuario. "
+            "Por favor, solicítale estos datos al usuario (Nombre completo y Correo electrónico) en tu respuesta y espera su mensaje con los datos antes de volver a invocar esta herramienta."
+        )
+        
     # Actualizar Supabase
     try:
         # Asegurarnos de que el número tenga el formato JID completo (@s.whatsapp.net) para buscar en Supabase

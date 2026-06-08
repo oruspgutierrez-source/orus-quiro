@@ -30,6 +30,110 @@ _message_buffers: dict[str, list[dict]] = {}
 _buffer_locks: dict[str, asyncio.Lock] = {}
 
 
+def try_extract_slots_for_user_date(user_msg: str, user_uuid: str) -> str | None:
+    """
+    Analiza el mensaje del usuario y busca si eligió un día pero no especificó la hora.
+    Si es así, busca el último mensaje del asistente con la tabla de disponibilidad en Supabase,
+    extrae las horas disponibles para ese día específico y las retorna formateadas.
+    """
+    text_lower = user_msg.lower()
+    
+    # 1. Verificar si ya especificó la hora. Si tiene "am", "pm", "hs", etc., no interceptar.
+    hour_patterns = [
+        r'\b\d{1,2}\s*(?:am|pm|hs|horario|horas|h)\b',
+        r'\b\d{1,2}\s*:\s*\d{2}\b',
+        r'a las \d{1,2}',
+        r'las \d{1,2}'
+    ]
+    for pattern in hour_patterns:
+        if re.search(pattern, text_lower):
+            return None
+
+    # 2. Buscar si el usuario mencionó algún número de día (ej: 8, 9, 12, 13) o nombre de día (lunes, martes, etc.)
+    day_numbers = re.findall(r'\b([1-9]|[12]\d|3[01])\b', text_lower)
+    day_names = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo']
+    mentioned_days = [d for d in day_names if d in text_lower]
+    
+    if not day_numbers and not mentioned_days:
+        return None
+
+    # 3. Buscar en Supabase el último mensaje del asistente con la tabla de disponibilidad
+    try:
+        res = supabase.table('orus_messages')\
+            .select('content')\
+            .eq('user_id', user_uuid)\
+            .eq('role', 'assistant')\
+            .ilike('content', '%horarios disponibles%')\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
+            
+        if not res.data:
+            res = supabase.table('orus_messages')\
+                .select('content')\
+                .eq('user_id', user_uuid)\
+                .eq('role', 'assistant')\
+                .ilike('content', '%Mañana:%')\
+                .order('created_at', desc=True)\
+                .limit(1)\
+                .execute()
+                
+        if not res.data:
+            return None
+            
+        last_slots_msg = res.data[0]['content']
+    except Exception as e:
+        print(f"[Slots Interceptor Error] Fallo al consultar Supabase: {e}", flush=True)
+        return None
+
+    # 4. Dividir por líneas e intentar emparejar
+    lines = last_slots_msg.split('\n')
+    target_line_idx = -1
+    for idx, line in enumerate(lines):
+        line_lower = line.lower()
+        num_match = False
+        if day_numbers:
+            for num in day_numbers:
+                if re.search(r'\b' + num + r'\b', line_lower):
+                    num_match = True
+                    break
+        name_match = False
+        if mentioned_days:
+            for name in mentioned_days:
+                norm_line = line_lower.replace('é', 'e').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+                norm_name = name.replace('é', 'e').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+                if norm_name in norm_line:
+                    name_match = True
+                    break
+                    
+        if num_match or name_match:
+            target_line_idx = idx
+            break
+            
+    if target_line_idx == -1:
+        return None
+        
+    day_header = lines[target_line_idx].strip().rstrip(':').rstrip('.')
+    
+    available_hours = []
+    for i in range(target_line_idx + 1, len(lines)):
+        line = lines[i].strip()
+        if not line:
+            continue
+        # Si la línea parece el encabezado de otro día, paramos
+        if ':' in line and not any(kw in line.lower() for kw in ['mañana', 'tarde', 'am', 'pm']):
+            break
+        hours_found = re.findall(r'\b\d{1,2}(?:am|pm)\b', line.lower())
+        available_hours.extend(hours_found)
+        
+    if not available_hours:
+        return None
+        
+    hours_str = ", ".join(available_hours)
+    # Formatear tal cual el requerimiento: "en el dia [Día] tenemos disponibles estas horas: [Horas]"
+    return f"en el dia {day_header} tenemos disponibles estas horas: {hours_str}"
+
+
 def _get_lock(sender_id: str) -> asyncio.Lock:
     """Obtiene o crea un lock asyncio para un sender_id específico."""
     if sender_id not in _buffer_locks:
@@ -480,6 +584,25 @@ async def _process_buffer(sender_id: str, payload: dict):
                 }).execute()
             except Exception as e:
                 print(f"Error con historial/persistencia: {e}", flush=True)
+
+        # Interceptar selección parcial de día en agendamiento (Fase 4)
+        if payment_status == 'paid' and not appointment_date and user_uuid:
+            slots_reply = try_extract_slots_for_user_date(text_body, user_uuid)
+            if slots_reply:
+                print(f"[Slots Interceptor] Interceptando mensaje y enviando slots: {slots_reply}", flush=True)
+                full_reply = slots_reply + " [##EOS##]"
+                try:
+                    supabase.table('orus_messages').insert({
+                        'user_id': user_uuid,
+                        'role': 'assistant',
+                        'content': full_reply,
+                        'sentiment_flag': 'Interés',
+                        'requires_human': False
+                    }).execute()
+                except Exception as e:
+                    print(f"Error persistiendo intercepción de slots: {e}", flush=True)
+                await wa_client.send_message(to=real_sender_id, text=slots_reply)
+                return
 
         prompt_with_context = f"[Metadatos del Remitente: JID={real_sender_id}]\nUsuario: {cleaned_text}"
 
