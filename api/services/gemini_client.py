@@ -295,8 +295,16 @@ ESTRUCTURA DEL JSON:
                 config=config
             )
             
-            parts = response.candidates[0].content.parts
-            function_calls = [p.function_call for p in parts if p.function_call] if parts else []
+            print(f"[DEBUG GEMINI] response.candidates: {response.candidates}", flush=True)
+            if response.function_calls:
+                print(f"[DEBUG GEMINI] response.function_calls: {response.function_calls}", flush=True)
+            
+            parts = response.candidates[0].content.parts if response.candidates else []
+            print(f"[DEBUG GEMINI] parts={parts}", flush=True)
+            
+            function_calls = response.function_calls if response.function_calls else ([p.function_call for p in parts if p.function_call] if parts else [])
+            print(f"[DEBUG GEMINI] function_calls={function_calls}", flush=True)
+
             
             if not function_calls:
                 # Handle potential AttributeError if response.text is empty or not present
