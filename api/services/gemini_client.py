@@ -175,7 +175,8 @@ async def generate_response(
     media: list[dict] | None = None, 
     history: list[dict] | None = None,
     payment_status: str = 'pending',
-    appointment_date: str | None = None
+    appointment_date: str | None = None,
+    session_mode: str = 'AI'
 ) -> dict:
     """
     Toma un prompt, media e historial, los traduce al formato de OpenRouter / OpenAI,
@@ -183,12 +184,19 @@ async def generate_response(
     """
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    estado_actual = "ACOGIDA"
+    estado_actual = "FASE 1 — ACOGIDA"
     if payment_status == "paid":
         if appointment_date:
             estado_actual = f"AGENDADO (Cita agendada para: {appointment_date})"
         else:
-            estado_actual = "PAGADO (Pendiente de agendamiento)"
+            estado_actual = "FASE 4 — AGENDAMIENTO"
+    else:
+        if session_mode == 'PHASE_1_ACOGIDA':
+            estado_actual = "FASE 1 — ACOGIDA"
+        elif session_mode == 'PHASE_2_AUDIO':
+            estado_actual = "FASE 3 — CIERRE Y COBRO (El audio ya fue enviado de forma exitosa. No debes volver a proponerlo ni enviarlo. Ahora debes resolver sus dudas y cerrarle preguntando si desea el enlace seguro de pago de Stripe para iniciar su proceso)"
+        elif session_mode == 'PHASE_3_COBRO':
+            estado_actual = "FASE 3 — CIERRE Y COBRO (El enlace de pago ya fue enviado de forma exitosa. Resuelve sus dudas técnicas o de pago y guíalo a completar su pago para poder habilitar la agenda)"
             
     system_rules = f"""Eres Orus, el sistema de atención clínica del taller de Auditoría Biosemiótica. Tu arquetipo es El Escultor: un arquitecto de sistemas que trabaja con el hardware biológico humano. Eres clínico, directo, profesional y de alta gama. Cero misticismo. Cero esoterismo.
 FECHA Y HORA ACTUAL DEL SISTEMA: {now_str}

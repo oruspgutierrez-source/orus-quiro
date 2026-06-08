@@ -376,6 +376,97 @@ async def _process_buffer(sender_id: str, payload: dict):
                     supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
                 return
 
+        # ── 5.6. Switch Determinista de Estados ─────────────────────────────────
+        is_payment_paid = (payment_status == 'paid')
+        
+        if not is_payment_paid:
+            desvio_keywords = ['?', '¿', 'quien es', 'quien eres', 'quién es', 'quién eres', 'quiromancia', 'magia', 'estudio', 'donde estan', 'dónde están', 'costo', 'precio', 'cuanto cuesta', 'cuánto cuesta', 'neuro', 'biosemiotica', 'metodo', 'metodologia', 'cómo es', 'como es']
+            es_desvio = any(kw in text_lower for kw in desvio_keywords) or ('?' in cleaned_text)
+            
+            # Caso 1: ACOGIDA / AI Inicial
+            if session_mode == 'AI':
+                msg_text = (
+                    "Bienvenido al taller. Lo que hacemos aquí no se basa en adivinación ni en interpretación subjetiva. "
+                    "Trabajamos con el hardware biológico: las señales que tu cuerpo ya registró y que definen tus patrones de "
+                    "comportamiento, decisión y relación. El proceso se llama Auditoría Biosemiótica, y está fundamentado en la "
+                    "intersección entre la tradición del Hasta Samudrika Shastra y las ciencias del comportamiento humano. "
+                    "¿Te gustaría que te explique en detalle cómo funciona este diagnóstico?"
+                )
+                if user_uuid:
+                    supabase.table('orus_users').update({'session_mode': 'PHASE_1_ACOGIDA'}).eq('id', user_uuid).execute()
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                    supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
+                await wa_client.send_message(to=real_sender_id, text=msg_text)
+                return
+
+            # Caso 2: PHASE_1_ACOGIDA
+            elif session_mode == 'PHASE_1_ACOGIDA':
+                affirmative_keywords = ['sí', 'si', 'claro', 'por favor', 'ok', 'yes', 'quiero', 'dale', 'dale una', 'explicame', 'cómo funciona', 'continua', 'continuemos', 'explicación', 'audio', 'explicacion']
+                es_afirmativo = any(kw in text_lower for kw in affirmative_keywords)
+                
+                if es_afirmativo and not es_desvio:
+                    from api.services.gemini_client import send_introductory_audio
+                    await send_introductory_audio(real_sender_id)
+                    if user_uuid:
+                        supabase.table('orus_users').update({'session_mode': 'PHASE_2_AUDIO'}).eq('id', user_uuid).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': '[AUDIO_ENVIADO]'}).execute()
+                    return
+                elif es_desvio:
+                    cleaned_text += "\n[INSTRUCCIÓN INTERNA: El usuario está en la fase de Acogida (Fase 1) y tiene una duda. Responde de forma clínica y autoritaria a su duda. Al final de tu respuesta, pregúntale explícitamente si tiene alguna otra pregunta o si desea proceder con el protocolo de atendimiento enviándole la explicación técnica mediante el audio de 3 minutos (respondiendo SÍ).]"
+                else:
+                    msg_text = "¿Te gustaría que te explique en detalle cómo funciona el diagnóstico de Auditoría Biosemiótica? Responde SÍ para compartirte la explicación técnica."
+                    if user_uuid:
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
+                    await wa_client.send_message(to=real_sender_id, text=msg_text)
+                    return
+
+            # Caso 3: PHASE_2_AUDIO
+            elif session_mode == 'PHASE_2_AUDIO':
+                purchase_keywords = ['quiero comprar', 'quiero iniciar', 'sí', 'si', 'cómo pago', 'link', 'enlace', 'pagar', 'comprar', 'continuar', 'continuemos', 'iniciar', 'empezar', 'comenzar', 'listo', 'lista', 'adquirir', 'stripe']
+                es_compra = any(kw in text_lower for kw in purchase_keywords)
+                
+                if es_compra and not es_desvio:
+                    from api.services.gemini_client import generate_payment_link
+                    await generate_payment_link(real_sender_id)
+                    if user_uuid:
+                        supabase.table('orus_users').update({'session_mode': 'PHASE_3_COBRO'}).eq('id', user_uuid).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': '[COBRO_ENVIADO]'}).execute()
+                    return
+                elif es_desvio:
+                    cleaned_text += "\n[INSTRUCCIÓN INTERNA: El usuario ya recibió el audio explicativo y tiene una duda. Responde de forma clínica y autoritaria a su duda. Al final de tu respuesta, pregúntale explícitamente si tiene alguna otra pregunta o si desea proceder con el protocolo de atendimiento enviándole el enlace seguro de pago de Stripe (49 USD) para iniciar su proceso.]"
+                else:
+                    msg_text = "¿Deseas iniciar tu proceso de Auditoría Biosemiótica? Si estás listo, respóndeme con un sí o pídeme el enlace de pago seguro para comenzar."
+                    if user_uuid:
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
+                    await wa_client.send_message(to=real_sender_id, text=msg_text)
+                    return
+
+            # Caso 4: PHASE_3_COBRO
+            elif session_mode == 'PHASE_3_COBRO':
+                link_keywords = ['enlace', 'link', 'pago', 'pagar', 'volver a enviar', 'mandar', 'enviar', 'no me llego', 'no me llegó', 'stripe']
+                es_pedido_link = any(kw in text_lower for kw in link_keywords)
+                
+                if es_pedido_link and not es_desvio:
+                    from api.services.gemini_client import generate_payment_link
+                    await generate_payment_link(real_sender_id)
+                    if user_uuid:
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': '[COBRO_ENVIADO]'}).execute()
+                    return
+                elif es_desvio:
+                    cleaned_text += "\n[INSTRUCCIÓN INTERNA: El enlace de pago ya fue enviado (Fase 3). El usuario tiene una duda o objeción. Responde de forma clínica y autoritaria a su duda. Al final de tu respuesta, pregúntale explícitamente si tiene alguna otra pregunta o si desea proceder con el protocolo de atendimiento realizando el pago mediante el enlace seguro que le enviaste para poder agendar su sesión.]"
+                else:
+                    msg_text = "El enlace de pago seguro de Stripe (49 USD) ya fue generado y enviado a este chat. Una vez completado el pago, el sistema te permitirá agendar tu sesión de forma inmediata. ¿Deseas que te lo envíe nuevamente?"
+                    if user_uuid:
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'user', 'content': text_body}).execute()
+                        supabase.table('orus_messages').insert({'user_id': user_uuid, 'role': 'assistant', 'content': msg_text}).execute()
+                    await wa_client.send_message(to=real_sender_id, text=msg_text)
+                    return
+
         # ── 6. LLM con Memoria ────────────────────────────────────────────────
         history_msgs = []
         if user_uuid:
@@ -423,7 +514,8 @@ async def _process_buffer(sender_id: str, payload: dict):
                     media=gemini_media, 
                     history=history_msgs,
                     payment_status=payment_status,
-                    appointment_date=appointment_date
+                    appointment_date=appointment_date,
+                    session_mode=session_mode
                 ),
                 timeout=90.0  # Más tiempo para permitir Function Calling y media
             )
