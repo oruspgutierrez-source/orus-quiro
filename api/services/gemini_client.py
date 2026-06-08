@@ -295,7 +295,14 @@ ESTRUCTURA DEL JSON:
             )
             
             parts = response.candidates[0].content.parts
+            print(f"[DEBUG GEMINI] parts={parts}", flush=True)
+            print(f"[DEBUG GEMINI] parts type={type(parts)}, len={len(parts) if parts else 'N/A'}", flush=True)
+            try:
+                print(f"[DEBUG GEMINI] response.text={repr(response.text)}", flush=True)
+            except Exception as _e:
+                print(f"[DEBUG GEMINI] response.text error: {_e}", flush=True)
             function_calls = [p.function_call for p in parts if p.function_call] if parts else []
+            print(f"[DEBUG GEMINI] function_calls={function_calls}", flush=True)
             
             if not function_calls:
                 # Handle potential AttributeError if response.text is empty or not present
