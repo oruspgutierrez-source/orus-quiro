@@ -18,19 +18,21 @@
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Último Estado:** Infraestructura en Producción — **Spec 33 Completado**. [NOTA DE CORRECCIÓN: El Dashboard está en la VPS (EasyPanel). Lo único en Vercel es la app de recolección de material biométrico.]
-> - **El flujo completo ya está cargado y operando en la VPS.**
-> - **Backend y Dashboard** están alojados en la VPS mediante EasyPanel.
-> - **App de Datos Biométricos** está alojada en Vercel.
-> - **Deduplicación y Routing:** Corriendo en producción con 1 worker de uvicorn para garantizar la deduplicación de mensajes. Routing de LIDs corregido.
+> **Último Estado:** Infraestructura en Producción — **Spec 35 Completado** (Robustecimiento y Validación Conversacional).
+> - **El flujo completo de reservas y exclusiones está operando en la VPS.**
+> - **Archivos Críticos del Sistema:**
+>   - `api/services/message_processor.py`: Contiene el switch determinista de fases con exclusión por palabras clave contextológicas y el interceptor de selección parcial de fechas.
+>   - `api/services/calendar_client.py`: Contiene la herramienta `book_appointment` con validación estricta (firewall anti-placeholders) y el despacho de guías de agenda.
+>   - `api/services/gemini_client.py`: Contiene el cliente Gemini, prompts de fases y triggers post-pago.
+>   - `bitacoras/BITACORA_SESION.md` y `bitacoras/agents_log.md`: Bitácoras y registro de decisiones de IA y lógica.
 
 > [!NOTE]
-> **RUTA PARA LA SIGUIENTE SESIÓN (PROCESO DE AFINACIÓN Y VALIDACIÓN DE INTERVENCIÓN):**
-> Al iniciar la siguiente sesión, se debe seguir un riguroso proceso de afinación y pruebas:
-> 1. **Medir el estrés del sistema**: Realizar pruebas de carga y respuesta rápida directamente desde la interfaz del chat del Dashboard.
-> 2. **Simular intervenciones manuales**: Alternar entre los modos `HUMAN` y `AI` para estresar los timers de debounce.
-> 3. **Coordinar el flujo con el bot**: Probar exhaustivamente el retorno automático del bot a modo `AI` con instrucciones contextuales (`[SYSTEM_NOTE]`) sin generar alucinaciones ni reprocesar material antiguo.
-> 4. **Buscar potenciales problemas mediante tests manuales interrumpiendo al agente**: Dejar notas de intervención desde el Dashboard durante las diferentes fases conversacionales, validando cómo responde el bot tras recibir la intervención y confirmando cómo el switch determinista del backend se adapta orgánicamente al proceso.
+> **RUTA PARA LA SIGUIENTE SESIÓN (FLUJO DE REINICIO Y VALIDACIÓN):**
+> Al iniciar la siguiente sesión, el agente debe seguir estrictamente este flujo de verificación y pruebas:
+> 1. **Medir el estrés del sistema**: Enviar mensajes rápidos y verificar la consistencia del buffer de debounce (10 segundos) en el chat del Dashboard.
+> 2. **Simular intervenciones manuales**: Alternar dinámicamente entre los modos `HUMAN` y `AI` desde el Dashboard para verificar el comportamiento de los timers.
+> 3. **Prueba de Interrupción Manual**: Durante una fase activa (Fase 1 o Fase 4), dejar una nota de intervención contextual desde el Dashboard (ej. indicando desvíos) y verificar cómo el bot absorbe la nota (`[SYSTEM_NOTE]`) al retornar al modo `AI` sin reprocesar historial antiguo.
+> 4. **Test de Resistencia Conversacional**: Realizar pruebas manuales forzando objeciones (preguntar por precios o el especialista en Fase 1) para certificar que el switch determinista en `message_processor.py` delega correctamente la respuesta al LLM sin disparar prematuramente el audio o Stripe.
 
 ---
 
