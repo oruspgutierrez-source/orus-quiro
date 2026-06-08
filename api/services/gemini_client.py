@@ -443,6 +443,28 @@ ESTRUCTURA DEL JSON:
                     parsed_json = json.loads(raw_text.strip())
                     if not parsed_json.get("reply", "").endswith("[##EOS##]"):
                         parsed_json["reply"] = parsed_json.get("reply", "") + " [##EOS##]"
+                    
+                    # Ejecutar safety net
+                    import re
+                    jid_match = re.search(r'JID=([^\]\s]+)', prompt)
+                    to_number = jid_match.group(1) if jid_match else None
+                    if to_number:
+                        reply_str = parsed_json.get("reply", "")
+                        if "[AUDIO_ENVIADO]" in reply_str and last_executed_tool != "send_introductory_audio":
+                            print(f"[Safety Net] LLM omitió llamada a send_introductory_audio pero devolvió [AUDIO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
+                            try:
+                                await send_introductory_audio(to_number)
+                                last_executed_tool = "send_introductory_audio"
+                            except Exception as ex:
+                                print(f"[Safety Net Error] Al ejecutar send_introductory_audio: {ex}", flush=True)
+                        elif "[COBRO_ENVIADO]" in reply_str and last_executed_tool != "generate_payment_link":
+                            print(f"[Safety Net] LLM omitió llamada a generate_payment_link pero devolvió [COBRO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
+                            try:
+                                await generate_payment_link(to_number)
+                                last_executed_tool = "generate_payment_link"
+                            except Exception as ex:
+                                print(f"[Safety Net Error] Al ejecutar generate_payment_link: {ex}", flush=True)
+
                     return parsed_json
                 except Exception as e:
                     print(f"[OpenRouter] Error parseando JSON: {e}\nRaw: {raw_text}")
@@ -450,6 +472,26 @@ ESTRUCTURA DEL JSON:
                         safe_reply = raw_text.strip()
                         if not safe_reply.endswith("[##EOS##]"):
                             safe_reply += " [##EOS##]"
+                        
+                        import re
+                        jid_match = re.search(r'JID=([^\]\s]+)', prompt)
+                        to_number = jid_match.group(1) if jid_match else None
+                        if to_number:
+                            if "[AUDIO_ENVIADO]" in safe_reply and last_executed_tool != "send_introductory_audio":
+                                print(f"[Safety Net] LLM omitió llamada a send_introductory_audio pero devolvió [AUDIO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
+                                try:
+                                    await send_introductory_audio(to_number)
+                                    last_executed_tool = "send_introductory_audio"
+                                except Exception as ex:
+                                    print(f"[Safety Net Error] Al ejecutar send_introductory_audio: {ex}", flush=True)
+                            elif "[COBRO_ENVIADO]" in safe_reply and last_executed_tool != "generate_payment_link":
+                                print(f"[Safety Net] LLM omitió llamada a generate_payment_link pero devolvió [COBRO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
+                                try:
+                                    await generate_payment_link(to_number)
+                                    last_executed_tool = "generate_payment_link"
+                                except Exception as ex:
+                                    print(f"[Safety Net Error] Al ejecutar generate_payment_link: {ex}", flush=True)
+
                         return {
                             "reply": safe_reply,
                             "sentiment": "Neutral",
