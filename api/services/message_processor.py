@@ -502,8 +502,25 @@ async def _process_buffer(sender_id: str, payload: dict):
 
             # Caso 2: PHASE_1_ACOGIDA
             elif session_mode == 'PHASE_1_ACOGIDA':
+                # Palabras de desvío/exclusión contextual (expert, price, location, misticism, etc.)
+                exclusion_keywords = [
+                    'experto', 'orus', 'peña', 'pena', 'quien', 'quién', 'estudios', 'trayectoria', 
+                    'precio', 'costo', 'cuanto', 'cuánto', 'valor', 'cobras', 'dolar', 'dólar', 'usd', 
+                    'donde', 'dónde', 'brasil', 'ubicacion', 'dirección', 'direccion', 'clinica', 'clínica',
+                    'quiromancia', 'gitanas', 'adivinación', 'adivinacion', 'esoterismo'
+                ]
+                has_exclusion = any(kw in text_lower for kw in exclusion_keywords)
+                
                 affirmative_keywords = ['sí', 'si', 'claro', 'por favor', 'ok', 'yes', 'quiero', 'dale', 'dale una', 'explicame', 'cómo funciona', 'continua', 'continuemos', 'explicación', 'audio', 'explicacion']
-                es_afirmativo = any(kw in text_lower for kw in affirmative_keywords)
+                
+                es_afirmativo = False
+                if not has_exclusion:
+                    if any(kw in text_lower for kw in affirmative_keywords):
+                        # Evitar falsos positivos como "quiero saber", "quiero preguntar" o "quisiera saber"
+                        if "quiero saber" in text_lower or "quiero preguntar" in text_lower or "quisiera saber" in text_lower:
+                            es_afirmativo = False
+                        else:
+                            es_afirmativo = True
                 
                 if es_afirmativo:
                     from api.services.gemini_client import send_introductory_audio
@@ -519,8 +536,23 @@ async def _process_buffer(sender_id: str, payload: dict):
 
             # Caso 3: PHASE_2_AUDIO
             elif session_mode == 'PHASE_2_AUDIO':
+                # Palabras de desvío/exclusión contextual
+                exclusion_keywords = [
+                    'experto', 'orus', 'peña', 'pena', 'quien', 'quién', 'estudios', 'trayectoria', 
+                    'donde', 'dónde', 'brasil', 'ubicacion', 'dirección', 'direccion', 'clinica', 'clínica',
+                    'quiromancia', 'gitanas', 'adivinación', 'adivinacion', 'esoterismo'
+                ]
+                has_exclusion = any(kw in text_lower for kw in exclusion_keywords)
+
                 purchase_keywords = ['quiero comprar', 'quiero iniciar', 'sí', 'si', 'cómo pago', 'link', 'enlace', 'pagar', 'comprar', 'continuar', 'continuemos', 'iniciar', 'empezar', 'comenzar', 'listo', 'lista', 'adquirir', 'stripe']
-                es_compra = any(kw in text_lower for kw in purchase_keywords)
+                
+                es_compra = False
+                if not has_exclusion:
+                    if any(kw in text_lower for kw in purchase_keywords):
+                        if "quiero saber" in text_lower or "quiero preguntar" in text_lower or "quisiera saber" in text_lower:
+                            es_compra = False
+                        else:
+                            es_compra = True
                 
                 if es_compra:
                     from api.services.gemini_client import generate_payment_link
