@@ -1,12 +1,13 @@
 import os
 import json
+import base64
 from datetime import datetime
-from google import genai
-from google.genai import types
+import httpx
 from pydantic import BaseModel, Field
 
-# Inicializamos el cliente asíncrono
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Configuración de OpenRouter
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
 class OrusResponse(BaseModel):
     reply: str = Field(description="La respuesta de Orus dirigida al usuario, separada con ||| si es larga y SIEMPRE terminando con [##EOS##].")
@@ -20,12 +21,6 @@ async def send_introductory_audio(to_number: str) -> str:
     el hardware biológico del consultante y cómo se estructura la sesión de diagnóstico.
     Debe ser invocada ÚNICAMENTE cuando el usuario responda afirmativamente a la pregunta
     activadora de Fase 1 (¿Te gustaría que te explique cómo funciona el proceso de diagnóstico?).
-    
-    Args:
-        to_number: El número de teléfono JID del destinatario (ej. '559999999999@s.whatsapp.net').
-        
-    Returns:
-        Un mensaje de confirmación del despacho de la nota de voz.
     """
     from api.services.wa_client import wa_client
     audio_path = "resources/media/audios/explicacion_proceso.ogg"
@@ -46,16 +41,6 @@ async def generate_payment_link(
     y lo envía directamente al WhatsApp del usuario.
     Debe ser invocada ÚNICAMENTE cuando el usuario demuestre intención de compra clara tras haber escuchado
     el audio explicativo (Fase 2) y confirme que desea iniciar su proceso de diagnóstico.
-    
-    Args:
-        to_number: El número de teléfono JID del destinatario (ej. '559999999999@s.whatsapp.net').
-        email: Correo electrónico opcional del cliente (si ya lo proporcionó o está disponible).
-        name: Nombre completo opcional del cliente (si ya lo proporcionó o está disponible).
-        currency: Divisa de cobro ISO en mayúsculas (ej. 'USD', 'EUR', 'BRL'). Por defecto 'USD'.
-        amount: Monto flotante a cobrar. Por defecto 49.00.
-        
-    Returns:
-        Mensaje de confirmación de despacho del enlace de pago.
     """
     from api.services.payment_gateway import create_stripe_checkout_session
     from api.services.wa_client import wa_client
@@ -81,6 +66,109 @@ async def generate_payment_link(
         print(f"[Tool generate_payment_link] Error creando sesión o enviando mensaje: {e}", flush=True)
         return f"Error al generar o enviar el enlace de pago: {str(e)}"
 
+# Declaración de herramientas en formato OpenAI
+OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "send_introductory_audio",
+            "description": "Envía el audio introductorio de 3 minutos sobre el proceso de Auditoría Biosemiótica. Invocar ÚNICAMENTE cuando el usuario dice SÍ a la pregunta explicativa de Fase 1.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to_number": {
+                        "type": "string",
+                        "description": "Número de teléfono JID completo (ej. '559999999999@s.whatsapp.net')."
+                    }
+                },
+                "required": ["to_number"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_payment_link",
+            "description": "Genera y envía un enlace de pago de Stripe al usuario. Invocar cuando el usuario demuestra intención de compra clara.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to_number": {
+                        "type": "string",
+                        "description": "Número de teléfono JID completo."
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email opcional del cliente si está disponible."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Nombre opcional del cliente."
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Divisa de cobro ISO (ej. 'USD', 'BRL'). Por defecto 'USD'."
+                    },
+                    "amount": {
+                        "type": "number",
+                        "description": "Monto. Por defecto 49.00."
+                    }
+                },
+                "required": ["to_number"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_free_slots",
+            "description": "Consulta los horarios disponibles en el calendario para un rango de fechas dado.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Fecha de inicio en formato YYYY-MM-DD"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "Fecha de fin en formato YYYY-MM-DD"
+                    }
+                },
+                "required": ["start_date", "end_date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "book_appointment",
+            "description": "Agenda una cita en el Google Calendar del profesional una vez que los datos del cliente han sido confirmados.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone_number": {
+                        "type": "string",
+                        "description": "Número de teléfono del cliente."
+                    },
+                    "date_time": {
+                        "type": "string",
+                        "description": "Fecha y hora en formato ISO 8601 (ej: '2026-05-20T10:00:00-03:00')."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Nombre completo del cliente."
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Correo electrónico del cliente."
+                    }
+                },
+                "required": ["phone_number", "date_time", "name", "email"]
+            }
+        }
+    }
+]
 
 async def generate_response(
     prompt: str, 
@@ -90,13 +178,11 @@ async def generate_response(
     appointment_date: str | None = None
 ) -> dict:
     """
-    Toma un prompt (y opcionalmente media e historial), lo envía a Gemini 2.5 Flash
-    y retorna un diccionario estructurado (JSON nativo).
+    Toma un prompt, media e historial, los traduce al formato de OpenRouter / OpenAI,
+    y ejecuta el bucle de razonamiento y herramientas de forma asíncrona.
     """
-    
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Determinar el estado actual del consultante a partir de los campos de la base de datos
     estado_actual = "ACOGIDA"
     if payment_status == "paid":
         if appointment_date:
@@ -180,10 +266,10 @@ PREGUNTAS FRECUENTES Y DESVÍOS (RESPONDE CON AUTORIDAD, LUEGO REDIRIGE):
 - "¿Qué es la quiromancia?" → "La quiromancia popular es interpretación subjetiva. Aquí trabajamos con otra cosa: analizamos la morfología dérmica y los dermatoglifos como registros objetivos del sistema nervioso, en línea con el Hasta Samudrika Shastra pero interpretados desde las ciencias del comportamiento. No es adivinación, es decodificación. ¿Te comparto el audio explicativo?"
 - "¿Cuánto cuesta?" → "El proceso tiene un valor de 49 USD. ¿Te gustaría conocer en detalle qué incluye antes de decidir?"
 - "¿Cómo funciona?" → Ofrece el audio directamente.
-- "¿Qué estudios tiene Orus?" → Activa el bloque QUIÉN ES ORUS PEÑA y redirige al audio.
+- "¿Qué estudios tiene Orus?" → Activa el bloque QUIÊN ES ORUS PEÑA y redirige al audio.
 - "¿Están en Brasil?" → "Sí, operamos desde Brasil. Las sesiones son en línea, el acceso es global."
 - Preguntas sobre neuroanatomía, comportamiento humano o Hasta Samudrika Shastra → Responde con síntesis técnica concisa que demuestre autoridad, luego: "Ese es el marco que aplicamos en la Auditoría. El audio de 3 minutos detalla cómo se articula en la práctica. ¿Lo escuchas ahora?"
-- "¿Qué es el Hasta Samudrika Shastra?" → "Es el sistema clásico védico de análisis de la mano — uno de los más rigurosos en cuanto a correspondencia entre morfología física y patrón conductual. En el taller lo usamos como base, reinterpretado a través del lenguaje de la neuroanatomía moderna. ¿Te comparto el audio donde Orus detalla la metodología completa?"
+- "¿Qué es el Hasta Samudrika Shastra?" → "Es el sistema clásico védico de análisis de la mano — uno de los más rigurosos en cuanto a correspondencia entre morfología física y patrón conductual. En el taller lo usamos como base, reinterpretado a través del lenguaje de la neurociencia moderna. ¿Te comparto el audio donde Orus detalla la metodología completa?"
 - CIERRE OBLIGATORIO: Toda respuesta a desvíos termina con una pregunta que retorna al flujo principal.
 
 REGLAS DE FORMATO Y ENTREGA (CRÍTICO):
@@ -216,110 +302,115 @@ ESTRUCTURA DEL JSON:
         "generate_payment_link": generate_payment_link
     }
 
-    try:
-        tools = [check_free_slots, book_appointment, send_introductory_audio, generate_payment_link]
-
-        config = types.GenerateContentConfig(
-            system_instruction=system_rules,
-            tools=tools,
-            # Deshabilitar thinking tokens: Gemini 2.5 Flash en modo thinking puede
-            # producir SOLO tokens internos (sin text ni function_call visible),
-            # lo que resulta en parts=None / response.text=None → SILENT_FALLBACK.
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-            safety_settings=[
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-                types.SafetySetting(
-                    category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=types.HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ]
-        )
-        
-        contents = []
-        if history:
-            for msg in history:
-                # Para el rol 'model', envolver el texto como JSON si no lo está ya.
-                # Esto es crítico: el system prompt instruye a Gemini a responder en JSON,
-                # entonces el historial del modelo DEBE ser JSON para que sea coherente.
-                msg_text = msg["text"]
-                if msg["role"] == "model" and not msg_text.strip().startswith("{"):
+    # Traducir historial a formato de OpenRouter/OpenAI
+    messages = [{"role": "system", "content": system_rules}]
+    
+    if history:
+        for msg in history:
+            msg_text = msg["text"]
+            # Asegurar que el rol 'model' de Gemini se guarde envuelto en JSON para consistencia
+            if msg["role"] == "model":
+                role = "assistant"
+                if not msg_text.strip().startswith("{"):
                     msg_text = json.dumps({
                         "reply": msg_text,
                         "sentiment": "Neutral",
                         "requires_human": False
                     }, ensure_ascii=False)
+            else:
+                role = "user"
                 
-                if contents and contents[-1].role == msg["role"]:
-                    contents[-1].parts.append(types.Part.from_text(text=f"\n{msg_text}"))
-                else:
-                    contents.append(types.Content(role=msg["role"], parts=[types.Part.from_text(text=msg_text)]))
+            messages.append({"role": role, "content": msg_text})
 
-        if media:
-            for i, m in enumerate(media):
-                media_part = types.Part.from_bytes(
-                    data=m["bytes"],
-                    mime_type=m["mime_type"]
-                )
-                contents.append(types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_text(text=f"[Adjunto {i+1}: {m['media_type']}]"),
-                        media_part
-                    ]
-                ))
+    # Traducir multimedia adjunto
+    user_content_parts = []
+    if media:
+        # Si el modelo soporta multimedia (ej: Gemini), enviamos los archivos
+        is_multimodal = "gemini" in OPENROUTER_MODEL.lower() or "claude" in OPENROUTER_MODEL.lower()
+        
+        for i, m in enumerate(media):
+            media_type = m["media_type"]
+            mime = m["mime_type"]
+            b64_data = base64.b64encode(m["bytes"]).decode("utf-8")
             
-            print(f"[Gemini] Enviando {len(media)} archivo(s) multimedia", flush=True)
+            if is_multimodal:
+                if "image" in mime or media_type == "image":
+                    user_content_parts.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime};base64,{b64_data}"
+                        }
+                    })
+                elif "audio" in mime or media_type == "audio":
+                    # Nota de voz / Audio
+                    ext = "mp3" if "mp3" in mime else ("ogg" if "ogg" in mime else "wav")
+                    user_content_parts.append({
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": b64_data,
+                            "format": ext
+                        }
+                    })
+            else:
+                # Si es un modelo de texto únicamente (ej: DeepSeek), agregamos un marcador descriptivo en texto
+                desc = f"[Adjunto {i+1}: {media_type.upper()} recibido por WhatsApp]"
+                user_content_parts.append({"type": "text", "text": desc})
 
-        if contents and contents[-1].role == "user":
-            contents[-1].parts.append(types.Part.from_text(text=f"\n{prompt}"))
-        else:
-            contents.append(types.Content(role="user", parts=[types.Part.from_text(text=prompt)]))
+    # Agregar el prompt final
+    user_content_parts.append({"type": "text", "text": prompt})
+    messages.append({"role": "user", "content": user_content_parts})
 
-        max_turns = 5
-        last_executed_tool = None  # Tracker robusto: se actualiza ANTES de ejecutar cada herramienta
-        for _ in range(max_turns):
-            response = await client.aio.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents,
-                config=config
-            )
-            
-            print(f"[DEBUG GEMINI] response.candidates: {response.candidates}", flush=True)
-            if response.function_calls:
-                print(f"[DEBUG GEMINI] response.function_calls: {response.function_calls}", flush=True)
-            
-            parts = response.candidates[0].content.parts if response.candidates else []
-            print(f"[DEBUG GEMINI] parts={parts}", flush=True)
-            
-            function_calls = response.function_calls if response.function_calls else ([p.function_call for p in parts if p.function_call] if parts else [])
-            print(f"[DEBUG GEMINI] function_calls={function_calls}", flush=True)
+    # Bucle de llamadas a herramientas (max 5 turnos)
+    max_turns = 5
+    last_executed_tool = None
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://api.orusquiroterapia.online",
+        "X-Title": "Orus Quiroterapia Bot",
+        "Content-Type": "application/json"
+    }
 
+    async with httpx.AsyncClient(timeout=60.0) as http_client:
+        for turn in range(max_turns):
+            payload = {
+                "model": OPENROUTER_MODEL,
+                "messages": messages,
+                "tools": OPENAI_TOOLS,
+                "tool_choice": "auto"
+            }
             
-            if not function_calls:
-                # Handle potential AttributeError if response.text is empty or not present
-                try:
-                    raw_text = response.text.strip() if response.text else ""
-                except Exception as e:
-                    raw_text = ""
-                    
-                # [Task 23.1] Blindaje antierosivo: usa last_executed_tool (tracker directo, sin scanning)
-                if not raw_text.strip():
-                    finish_reason = getattr(response.candidates[0], 'finish_reason', 'UNKNOWN')
-                    print(f"[Gemini] finish_reason={finish_reason}", flush=True)
+            # Forzar formato JSON en modelos compatibles
+            if "deepseek" in OPENROUTER_MODEL.lower() or "gpt" in OPENROUTER_MODEL.lower():
+                payload["response_format"] = {"type": "json_object"}
+                
+            print(f"[OpenRouter] Enviando solicitud a {OPENROUTER_MODEL} (Turno {turn + 1})...", flush=True)
+            r = await http_client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+            
+            if r.status_code != 200:
+                err_text = r.text
+                print(f"[OpenRouter Error] Status {r.status_code}: {err_text}", flush=True)
+                raise Exception(f"OpenRouter API error: {err_text}")
+                
+            res_data = r.json()
+            choice = res_data["choices"][0]
+            message_res = choice["message"]
+            content = message_res.get("content") or ""
+            tool_calls = message_res.get("tool_calls") or []
+            
+            print(f"[OpenRouter DEBUG] Content: {content}", flush=True)
+            if tool_calls:
+                print(f"[OpenRouter DEBUG] Tool calls: {tool_calls}", flush=True)
+                
+            # Si no hay llamadas a herramientas, procesamos el texto final
+            if not tool_calls:
+                raw_text = content.strip()
+                
+                # Blindaje antierosivo
+                if not raw_text:
                     fallback_token = "[SILENT_FALLBACK]"
                     if last_executed_tool:
-                        print(f"[Gemini] Respuesta vacía tras herramienta '{last_executed_tool}'. Aplicando blindaje.", flush=True)
+                        print(f"[OpenRouter] Respuesta vacía tras herramienta '{last_executed_tool}'. Aplicando blindaje.", flush=True)
                         if last_executed_tool == "send_introductory_audio":
                             fallback_token = "[AUDIO_ENVIADO]"
                         elif last_executed_tool == "generate_payment_link":
@@ -327,7 +418,7 @@ ESTRUCTURA DEL JSON:
                         elif last_executed_tool == "book_appointment":
                             fallback_token = "[AGENDA_COMPLETA]"
                     else:
-                        print(f"[Gemini] Respuesta vacía sin herramienta ejecutada (finish_reason={finish_reason}). SILENT_FALLBACK.", flush=True)
+                        print("[OpenRouter] Respuesta vacía sin herramienta ejecutada. SILENT_FALLBACK.", flush=True)
 
                     return {
                         "reply": f"{fallback_token} [##EOS##]",
@@ -335,7 +426,7 @@ ESTRUCTURA DEL JSON:
                         "requires_human": False
                     }
                 
-                # Limpiar el texto por si viene con markdown
+                # Limpiar Markdown
                 if raw_text.startswith("```json"):
                     raw_text = raw_text[7:]
                 if raw_text.startswith("```"):
@@ -343,7 +434,6 @@ ESTRUCTURA DEL JSON:
                 if raw_text.endswith("```"):
                     raw_text = raw_text[:-3]
                 
-                # Extraer JSON con regex para evitar basura al final (ej. [##EOS##] suelto)
                 import re
                 match = re.search(r'\{.*\}', raw_text, re.DOTALL)
                 if match:
@@ -355,13 +445,11 @@ ESTRUCTURA DEL JSON:
                         parsed_json["reply"] = parsed_json.get("reply", "") + " [##EOS##]"
                     return parsed_json
                 except Exception as e:
-                    print(f"[Gemini] Error parseando respuesta final: {e}\nRaw: {raw_text}")
-                    # Si el LLM devolvió texto libre (ignoro el JSON), lo envolvemos manualmente
+                    print(f"[OpenRouter] Error parseando JSON: {e}\nRaw: {raw_text}")
                     if raw_text and not raw_text.startswith("{"):
                         safe_reply = raw_text.strip()
                         if not safe_reply.endswith("[##EOS##]"):
                             safe_reply += " [##EOS##]"
-                        print("[Gemini] Fallback: Envolviendo texto libre en JSON manualmente.", flush=True)
                         return {
                             "reply": safe_reply,
                             "sentiment": "Neutral",
@@ -374,17 +462,25 @@ ESTRUCTURA DEL JSON:
                         "requires_human": True
                     }
 
-            print(f"[Gemini] Detectadas {len(function_calls)} llamadas a funciones", flush=True)
-            contents.append(response.candidates[0].content)
+            # Procesar llamadas a herramientas
+            print(f"[OpenRouter] Procesando {len(tool_calls)} llamadas a herramientas...", flush=True)
             
-            tool_responses = []
-            for fc in function_calls:
-                tool_name = fc.name
-                args = fc.args
+            # OpenAI requiere que agreguemos la respuesta del asistente que incluye los tool_calls
+            messages.append(message_res)
+            
+            for tc in tool_calls:
+                tc_id = tc["id"]
+                tool_name = tc["function"]["name"]
+                args_str = tc["function"]["arguments"]
                 
+                try:
+                    args = json.loads(args_str)
+                except Exception:
+                    args = {}
+                    
                 if tool_name in available_tools:
                     print(f"[Tool] Ejecutando {tool_name} con {args}", flush=True)
-                    last_executed_tool = tool_name  # Registrar ANTES de ejecutar
+                    last_executed_tool = tool_name
                     try:
                         func = available_tools[tool_name]
                         import inspect
@@ -392,31 +488,22 @@ ESTRUCTURA DEL JSON:
                             result = await func(**args)
                         else:
                             result = func(**args)
-                        tool_responses.append(types.Part.from_function_response(
-                            name=tool_name,
-                            response={"result": result}
-                        ))
                     except Exception as te:
                         print(f"[Tool Error] {te}", flush=True)
-                        tool_responses.append(types.Part.from_function_response(
-                            name=tool_name,
-                            response={"error": str(te)}
-                        ))
+                        result = f"Error: {str(te)}"
                 else:
-                    tool_responses.append(types.Part.from_function_response(
-                        name=tool_name,
-                        response={"error": f"Tool {tool_name} not found"}
-                    ))
-            
-            contents.append(types.Content(role="user", parts=tool_responses))
-            
+                    result = f"Error: Tool {tool_name} not found"
+                
+                # Agregar la respuesta del tool al historial
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "name": tool_name,
+                    "content": str(result)
+                })
+                
         return {
-            "reply": "Lo siento, me quedé atrapado en un bucle de tareas. Por favor intenta de nuevo. [##EOS##]",
+            "reply": "Lo siento, me quedé atrapado en un bucle de tareas de OpenRouter. [##EOS##]",
             "sentiment": "Confusión",
             "requires_human": True
         }
-        
-    except Exception as e:
-        safe_err = str(e).encode('ascii', 'replace').decode('ascii')
-        print(f"Error en Gemini API: {safe_err}", flush=True)
-        raise e
