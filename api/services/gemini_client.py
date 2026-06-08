@@ -245,10 +245,21 @@ ESTRUCTURA DEL JSON:
         contents = []
         if history:
             for msg in history:
+                # Para el rol 'model', envolver el texto como JSON si no lo está ya.
+                # Esto es crítico: el system prompt instruye a Gemini a responder en JSON,
+                # entonces el historial del modelo DEBE ser JSON para que sea coherente.
+                msg_text = msg["text"]
+                if msg["role"] == "model" and not msg_text.strip().startswith("{"):
+                    msg_text = json.dumps({
+                        "reply": msg_text,
+                        "sentiment": "Neutral",
+                        "requires_human": False
+                    }, ensure_ascii=False)
+                
                 if contents and contents[-1].role == msg["role"]:
-                    contents[-1].parts.append(types.Part.from_text(text=f"\n{msg['text']}"))
+                    contents[-1].parts.append(types.Part.from_text(text=f"\n{msg_text}"))
                 else:
-                    contents.append(types.Content(role=msg["role"], parts=[types.Part.from_text(text=msg["text"])]))
+                    contents.append(types.Content(role=msg["role"], parts=[types.Part.from_text(text=msg_text)]))
 
         if media:
             for i, m in enumerate(media):
