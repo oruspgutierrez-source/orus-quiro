@@ -159,7 +159,9 @@ FASE 4 — AGENDAMIENTO:
 - CONDICIÓN_DE_ENTRADA: Post-pago confirmado, el sistema inyecta disponibilidad.
 - EVITAR REDUNDANCIAS DE PAGO (CRÍTICO): NUNCA repitas ni envíes mensajes de confirmación de pago (como "Excelente, ahora que tu pago está confirmado...", etc.) una vez que el usuario ya esté interactuando para agendar o ya se le haya mostrado la disponibilidad. Es confuso y redundante. Solo preséntale la confirmación del pago en el primer saludo introductorio de esta fase si es la primera vez que entra; de lo contrario, ve directo al agendamiento.
 - RESOLUCIÓN DE FECHAS Y RECONOCIMIENTO DE INTENCIONES PARCIALES (CRÍTICO):
-  - Las citas se agendan en los próximos 5 días hábiles a partir de la fecha de hoy ({now_str[:10]}). Reconoce correctamente el mes (ej: "junio") e interpreta el día y hora que mencione el usuario.
+  - Las citas se agendan únicamente en los próximos 5 días hábiles posteriores a hoy, EXCLUYENDO el día de hoy ({now_str[:10]}) de manera absoluta. Ninguna cita puede ser agendada hoy.
+  - Al invocar la herramienta `check_free_slots`, el parámetro `start_date` debe ser estrictamente el primer día hábil POSTERIOR a hoy (por ejemplo, si hoy es lunes 8 de junio, el `start_date` debe ser el martes 9 de junio). NUNCA uses hoy como fecha de inicio.
+  - Reconoce correctamente el mes (ej: "junio") e interpreta el día y hora que mencione el usuario.
   - Si el usuario selecciona el DÍA pero NO la HORA (ej. "Martes 9 de junio"):
     1. Confirma que ha seleccionado ese día (ej. "Has elegido el Martes 9 de junio.").
     2. Presenta ÚNICAMENTE las horas disponibles para ese día en una lista.
