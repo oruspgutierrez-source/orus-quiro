@@ -222,6 +222,10 @@ ESTRUCTURA DEL JSON:
         config = types.GenerateContentConfig(
             system_instruction=system_rules,
             tools=tools,
+            # Deshabilitar thinking tokens: Gemini 2.5 Flash en modo thinking puede
+            # producir SOLO tokens internos (sin text ni function_call visible),
+            # lo que resulta en parts=None / response.text=None → SILENT_FALLBACK.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
             safety_settings=[
                 types.SafetySetting(
                     category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
