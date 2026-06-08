@@ -403,3 +403,11 @@ Antes de tocar código a ciegas o improvisar:
 - **Inyección Dinámica de Estado**: Se reestructuró la comunicación con Gemini pasando los campos `payment_status` y `appointment_date` directamente desde Supabase en la consulta de usuario.
 - **Reglas de Estado en el Prompt**: Se agregaron reglas de invalidación explícitas en el system prompt de Gemini (`gemini_client.py`) para omitir de forma absoluta las fases previas si el consultante ya está en estado `PAGADO` (redirección directa a agendamiento) o `AGENDADO` (soporte y respuesta cordial).
 - **Certificación**: Se diseñó y ejecutó una suite de validación en `scratch/test_gemini_resolution.py` que comprueba el correcto comportamiento en los tres estados lógicos (`pending`, `paid/unscheduled`, `paid/scheduled`).
+
+### 2. Refinamiento de la Fase 4 de Agendamiento (Resolución de Fechas Parciales y Evitación de Redundancia)
+- **Detección de Redundancia y Selección Parcial**: Se detectó que si el usuario seleccionaba un día pero no la hora (ej: "Martes 9 de junio"), el bot respondía confirmando el pago nuevamente de forma redundante y solicitando de nuevo elegir el día.
+- **Corrección en el Prompt**: Se reescribieron las reglas de la Fase 4 en `system_rules` (`api/services/gemini_client.py`) para:
+  1. Evitar por completo repetir el mensaje de confirmación de pago una vez que el usuario ya está interactuando en la fase de agendamiento.
+  2. Si el usuario selecciona el día pero no la hora, el bot confirma el día elegido, lista únicamente los horarios correspondientes a ese día, y le pide elegir la hora (sin pedir datos personales ni volver a preguntar el día).
+  3. Resolver correctamente el mes y fechas correspondientes a los próximos 5 días hábiles a partir de la fecha del sistema.
+- **Certificación**: Se actualizó `scratch/test_gemini_resolution.py` para simular la selección de día sin hora y se certificó que la respuesta de Gemini cumple con las nuevas pautas sin redundancia de pago.
