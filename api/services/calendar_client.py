@@ -248,11 +248,32 @@ def book_appointment(phone_number: str, date_time: str, name: str, email: str) -
     
     # Actualizar Supabase
     try:
-        supabase.table('orus_users').update({'appointment_date': date_time}).eq('phone_number', phone_number).execute()
-        print(f"[DB] orus_users.appointment_date actualizado a {date_time} para {phone_number}")
+        # Asegurarnos de que el número tenga el formato JID completo (@s.whatsapp.net) para buscar en Supabase
+        clean_jid = phone_number.strip()
+        if not clean_jid.endswith("@s.whatsapp.net"):
+            import re
+            digits = "".join(re.findall(r"\d+", clean_jid))
+            clean_jid = f"{digits}@s.whatsapp.net"
+            
+        print(f"[DB] Intentando actualizar appointment_date a {date_time} para JID: {clean_jid}", flush=True)
+        res = supabase.table('orus_users').update({'appointment_date': date_time}).eq('phone_number', clean_jid).execute()
+        
+        # Si no se modificó ninguna fila (data vacía), intentamos con solo dígitos
+        if not res.data:
+            import re
+            digits_only = "".join(re.findall(r"\d+", phone_number))
+            print(f"[DB] JID no encontrado, intentando actualizar con dígitos solos: {digits_only}", flush=True)
+            res2 = supabase.table('orus_users').update({'appointment_date': date_time}).eq('phone_number', digits_only).execute()
+            if res2.data:
+                print(f"[DB] Éxito: orus_users.appointment_date actualizado usando dígitos para {digits_only}", flush=True)
+            else:
+                print(f"[DB WARNING] Ninguna fila actualizada para {phone_number} ni en formato JID ni dígitos.", flush=True)
+        else:
+            print(f"[DB] Éxito: orus_users.appointment_date actualizado usando JID para {clean_jid}", flush=True)
+            
     except Exception as e:
         safe_db_err = str(e).encode('ascii', 'replace').decode('ascii')
-        print(f"[DB ERROR] {safe_db_err}")
+        print(f"[DB ERROR] {safe_db_err}", flush=True)
 
     # Programar el envío de imágenes en segundo plano de manera robusta
     def trigger_visual_protocol(link: str):
