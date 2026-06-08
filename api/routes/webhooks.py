@@ -44,7 +44,12 @@ def normalize_evolution_payload(payload: dict) -> tuple[str, dict]:
     elif isinstance(raw_data, dict):
         data_node = raw_data
     else:
-        data_node = {}
+        data_node = raw_data if raw_data is not None else {}
+
+    # Si data_node no es un diccionario (por ejemplo, si es una lista de strings o un string directo)
+    # lo envolvemos en un diccionario para evitar fallos de .get() en el receptor
+    if not isinstance(data_node, dict):
+        data_node = {"value": data_node}
 
     # Si aún así no tiene 'key' ni 'message', buscar recursivamente (por si la estructura mutó fuerte)
     if "key" not in data_node and "message" not in data_node:

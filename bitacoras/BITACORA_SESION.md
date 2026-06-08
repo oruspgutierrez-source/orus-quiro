@@ -381,3 +381,25 @@ Antes de tocar código a ciegas o improvisar:
 - **Uvicorn local:** `http://0.0.0.0:8000` (con `--reload` y `$env:PYTHONUTF8=1` activos).
 - **Cerebro Cognitivo:** Gemini 2.5 Flash.
 - **Stripe:** Regenerar `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` antes de cualquier prueba de pago.
+
+---
+
+## ⏸️ Estado del Proyecto: Pausa por Soporte Técnico (2026-06-07)
+
+* **Motivo:** Pausa preventiva en las pruebas de estrés conversacionales y en el pipeline agentico hasta recibir una respuesta formal del soporte técnico de Google.
+* **Acción Tomada:** 
+  - Generación del reporte de caídas y falsas cancelaciones en el orquestador (`soporte_caida_procesos_agenticos.md`).
+  - Ejecución paso a paso del protocolo de limpieza en caliente de la terminal local (purgado de archivos JSON temporales de test, verificación del puerto 8000 libre y confirmación de ausencia de subprocesos huérfanos de Python).
+  - Verificación estática sintáctica de los cambios en `api/routes/webhooks.py`, confirmando que el entorno está estable.
+* **Próximos Pasos:** Esperar la resolución del caso por parte del soporte de Google antes de continuar con la ejecución del Spec 35.
+
+---
+
+## 🛠️ Trabajo Realizado (Sesión 2026-06-08 — Resolución de Conflicto de Notas y Estados)
+
+### 1. Detección y Resolución de Conflicto Lógico
+- **Detección**: Las notas administrativas (`[SYSTEM_NOTE]`) inyectadas durante los handovers manuales persistían de forma activa en el historial enviado a Gemini en turnos posteriores (nuevas interacciones), provocando contradicciones cognitivas directas ante nuevas fases y resultando en un `[SILENT_FALLBACK]`.
+- **Filtro de Notas Obsoletas**: Se modificó `message_processor.py` para ignorar la inyección de `[SYSTEM_NOTE]` como instrucción administrativa activa si ya existe una respuesta del asistente posterior a la misma (lo que indica que la instrucción ya fue ejecutada).
+- **Inyección Dinámica de Estado**: Se reestructuró la comunicación con Gemini pasando los campos `payment_status` y `appointment_date` directamente desde Supabase en la consulta de usuario.
+- **Reglas de Estado en el Prompt**: Se agregaron reglas de invalidación explícitas en el system prompt de Gemini (`gemini_client.py`) para omitir de forma absoluta las fases previas si el consultante ya está en estado `PAGADO` (redirección directa a agendamiento) o `AGENDADO` (soporte y respuesta cordial).
+- **Certificación**: Se diseñó y ejecutó una suite de validación en `scratch/test_gemini_resolution.py` que comprueba el correcto comportamiento en los tres estados lógicos (`pending`, `paid/unscheduled`, `paid/scheduled`).

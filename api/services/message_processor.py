@@ -237,8 +237,10 @@ async def _process_buffer(sender_id: str, payload: dict):
         # ── 3. Firewall: verificar usuario ─────────────────────────────────────
         user_uuid = None
         session_mode = 'AI'
+        payment_status = 'pending'
+        appointment_date = None
         try:
-            user_check = supabase.table('orus_users').select('id, is_blocked, session_mode').eq('phone_number', real_sender_id).execute()
+            user_check = supabase.table('orus_users').select('id, is_blocked, session_mode, payment_status, appointment_date').eq('phone_number', real_sender_id).execute()
             if user_check.data:
                 user_data = user_check.data[0]
                 if user_data.get('is_blocked'):
@@ -246,6 +248,8 @@ async def _process_buffer(sender_id: str, payload: dict):
                     return
                 user_uuid = user_data.get('id')
                 session_mode = user_data.get('session_mode') or 'AI'
+                payment_status = user_data.get('payment_status') or 'pending'
+                appointment_date = user_data.get('appointment_date')
             else:
                 new_user = supabase.table('orus_users').insert({'phone_number': real_sender_id}).execute()
                 user_uuid = new_user.data[0].get('id')
@@ -378,12 +382,21 @@ async def _process_buffer(sender_id: str, payload: dict):
             try:
                 history = supabase.table('orus_messages').select('role, content').eq('user_id', user_uuid).order('created_at', desc=True).limit(8).execute()
                 if history.data:
+                    has_assistant_responded = False
                     for msg in history.data:
                         if "[SYSTEM_NOTE]" in msg['content']:
-                            # Si encontramos una nota interna, la insertamos como contexto del LLM y CORTAMOS el historial más viejo
-                            note = msg['content'].replace('[SYSTEM_NOTE]', '').strip()
-                            history_msgs.append({"role": "model", "text": f"[Instrucción Interna del Administrador]: {note}. Retoma la conversación a partir de aquí."})
-                            break
+                            # Si ya hubo una respuesta del asistente posterior a esta nota, significa que fue procesada/resuelta
+                            if has_assistant_responded:
+                                # Cortamos el historial aquí pero NO inyectamos la nota interna como instrucción activa
+                                break
+                            else:
+                                # Nota interna activa: la insertamos como contexto del LLM y cortamos la memoria
+                                note = msg['content'].replace('[SYSTEM_NOTE]', '').strip()
+                                history_msgs.append({"role": "model", "text": f"[Instrucción Interna del Administrador]: {note}. Retoma la conversación a partir de aquí."})
+                                break
+                        
+                        if msg['role'] == 'assistant':
+                            has_assistant_responded = True
                         
                         gemini_role = "model" if msg['role'] == 'assistant' else "user"
                         history_msgs.append({"role": gemini_role, "text": msg['content']})
@@ -405,7 +418,13 @@ async def _process_buffer(sender_id: str, payload: dict):
         print(f"[Processor] Llamando a Gemini para {real_sender_id}...{' (multimodal)' if gemini_media else ''}", flush=True)
         try:
             response_dict = await asyncio.wait_for(
-                generate_response(prompt_with_context, media=gemini_media, history=history_msgs),
+                generate_response(
+                    prompt_with_context, 
+                    media=gemini_media, 
+                    history=history_msgs,
+                    payment_status=payment_status,
+                    appointment_date=appointment_date
+                ),
                 timeout=90.0  # Más tiempo para permitir Function Calling y media
             )
         except asyncio.TimeoutError:
