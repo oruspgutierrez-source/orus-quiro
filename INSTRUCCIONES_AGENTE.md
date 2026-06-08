@@ -25,11 +25,12 @@
 > - **Deduplicación y Routing:** Corriendo en producción con 1 worker de uvicorn para garantizar la deduplicación de mensajes. Routing de LIDs corregido.
 
 > [!NOTE]
-> **RUTA PARA LA SIGUIENTE SESIÓN (PROCESO DE AFINACIÓN):**
-> Al iniciar la siguiente sesión, se debe seguir un riguroso proceso de afinación:
-> 1. **Medir el estrés del sistema:** Realizar pruebas de carga y respuesta rápida directamente desde la interfaz del chat del Dashboard.
-> 2. **Simular intervenciones manuales:** Alternar entre los modos `HUMAN` y `AI` para estresar los timers de debounce.
-> 3. **Coordinar el flujo con el bot:** Probar exhaustivamente el retorno automático del bot a modo `AI` con instrucciones contextuales (`[SYSTEM_NOTE]`) sin generar alucinaciones ni reprocesar material antiguo.
+> **RUTA PARA LA SIGUIENTE SESIÓN (PROCESO DE AFINACIÓN Y VALIDACIÓN DE INTERVENCIÓN):**
+> Al iniciar la siguiente sesión, se debe seguir un riguroso proceso de afinación y pruebas:
+> 1. **Medir el estrés del sistema**: Realizar pruebas de carga y respuesta rápida directamente desde la interfaz del chat del Dashboard.
+> 2. **Simular intervenciones manuales**: Alternar entre los modos `HUMAN` y `AI` para estresar los timers de debounce.
+> 3. **Coordinar el flujo con el bot**: Probar exhaustivamente el retorno automático del bot a modo `AI` con instrucciones contextuales (`[SYSTEM_NOTE]`) sin generar alucinaciones ni reprocesar material antiguo.
+> 4. **Buscar potenciales problemas mediante tests manuales interrumpiendo al agente**: Dejar notas de intervención desde el Dashboard durante las diferentes fases conversacionales, validando cómo responde el bot tras recibir la intervención y confirmando cómo el switch determinista del backend se adapta orgánicamente al proceso.
 
 ---
 

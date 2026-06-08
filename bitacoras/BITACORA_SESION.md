@@ -1,35 +1,34 @@
 # Bitácora de Sesión — Orus Quiro Bot
 
-**Última actualización:** 2026-06-06 12:15 BRT
-**Estado:** Servidores Operativos en Producción | Spec 33 Completado (Resolución LID & Deduplicación) [NOTA: El Dashboard está en la VPS/EasyPanel. Lo único en Vercel es la app Biométrica].
+**Última actualización:** 2026-06-08 19:10 BRT
+**Estado:** Servidores Operativos en Producción | Spec 35 Completado (Enlace de Agendamiento, Validación de Reserva y Reglas de Exclusión Contextuales).
 
 ---
 
-## 🎯 Spec 33 Activo: Resolución de Routing LID y Deduplicación de Mensajes
+## 🎯 Spec 35 Activo: Robustecimiento Conversacional y Blindaje de Agendamiento (Fase 4 y Fase 1)
+
+**Objetivos Estratégicos Acordados:**
+1. **[X] Firewall Conversacional en Reserva (`calendar_client.py`):** Modificar la herramienta `book_appointment` para que valide estrictamente la presencia de placeholders (`[Pendiente]`, etc.) en los campos `name` y `email`, retornando un error al LLM si no se han capturado datos válidos reales. Esto previene reservas prematuras por alucinación de parámetros.
+2. **[X] Extractor Determinista de Agenda (`message_processor.py`):** Crear una interceptación programática de selección parcial de días en la Fase 4. Si el usuario elige un día pero no la hora, el sistema extrae las horas disponibles del último mensaje de agenda enviado en el historial y responde con la estructura `"en el dia [Día] tenemos disponibles estas horas: [Horas]"`.
+3. **[X] Exclusiones Contextuales en Switches de Fase 1/2 (`message_processor.py`):** Implementar filtros para excluir palabras clave de desvío (expertos, precios, etc.) y términos negativos de los disparadores deterministas del saludo y audio de Stripe, garantizando que el control pase al LLM cuando existan preguntas profundas.
+
+---
+
+## 🎯 PRÓXIMA SESIÓN: Pruebas de Intervención Manual y Validación de Notas (Spec 36)
+
+**Problemas Críticos a Validar:**
+1. **Ajuste del Flujo de Intervención:** Validar el comportamiento del bot tras alternar entre los modos `HUMAN` y `AI` desde el Dashboard durante las diferentes fases conversacionales.
+2. **Respuesta ante Notas Clínicas / Notas de Sistema:** Probar cómo responde el bot al dejarle instrucciones contextuales (`[SYSTEM_NOTE]`) y confirmar que el switch determinista del backend se adapte de forma orgánica sin quiebres de flujo.
+3. **Pruebas Manuales de Estrés:** Interrumpir el flujo de agendamiento y de pago de forma manual para forzar objeciones y verificar la resiliencia del enrutador de mensajes.
+
+---
+
+## 🎯 HISTÓRICO: Spec 33 Activo (Resolución de Routing LID y Deduplicación)
 
 **Objetivos Estratégicos Acordados:**
 1. **[X] Normalización de Linked IDs (@lid):** Diseñar un parser e integrador en `wa_client.py` y `webhooks.py` capaz de resolver un JID real de WhatsApp (`@s.whatsapp.net`) a partir del ID encriptado de enlace (`@lid`) consultando la base de datos de Supabase o consumiendo el endpoint `/contact/findContacts` de Evolution API.
 2. **[X] Deduplicación y Consistencia de Memoria:** Reducir la cantidad de workers de Uvicorn en `Dockerfile` de 4 a 1 para asegurar que el espacio de memoria donde residen los temporizadores de debounce y el registro de mensajes vistos (`_seen_messages`) sea consistente, erradicando los envíos duplicados hacia los celulares de los usuarios.
 3. **[X] Documentación del Flujo de Despliegue (EasyPanel Webhooks):** Registrar el flujo para desencadenar el despliegue automático del backend y el dashboard programáticamente desde SSH sin requerir la intervención manual del navegador.
-
----
-
-
-## 🎯 PRÓXIMA SESIÓN: Protocolo de Hard-Reset Criptográfico y Refactorización del Routing (Spec 33)
-
-**Problemas Críticos Pendientes:**
-1. **Fallo de Encriptación de Meta ("Waiting for message"):** El celular del admin sigue en un loop de "Esperando mensaje" debido a corrupción de llaves / caché de Redis en Evolution API o copias de seguridad corruptas en Google Drive.
-2. **Caos en el Routing `@lid`:** El parche del `@lid` implementado hoy falló en el caso de respuestas directas desde notificaciones/mensajes del dashboard. Un usuario (la novia) respondió y su mensaje entró al sistema con el ID cifrado `@lid`. El bot le respondió a ese ID cifrado, por lo que el mensaje se quedó en el Dashboard y jamás llegó a WhatsApp.
-
-**Hoja de Ruta Acordada para la Siguiente Sesión:**
-Antes de tocar código a ciegas o improvisar:
-1. **Auditoría Documental:** Buscar e investigar la documentación oficial de Evolution API v2 respecto a `@lid` (Linked IDs) y el manejo de flujos híbridos (JID normal vs LID).
-2. **Prueba y Error Estructurado:** Crear un entorno seguro para inyectar payloads reales capturados de los logs y diseñar un parser/resolver de LIDs que sea 100% infalible antes de pasarlo a producción.
-3. **Hard-Reset Sincronizado:** 
-   - *Cliente:* Eliminar chat, desconectar dispositivos, backup limpio. Desinstalar WhatsApp.
-   - *Servidor:* Destruir instancia en EasyPanel, purgar Redis, limpiar logs.
-   - *Reconexión:* Instalar limpio y emparejar bot desde cero.
-4. **Alarma Anti-Amateur:** Establecer el sistema de telemetría para que detecte estos quiebres a nivel API y avise por Telegram en tiempo real.
 
 ---
 
