@@ -1,7 +1,86 @@
 # Bitácora de Sesión — Orus Quiro Bot
 
-**Última actualización:** 2026-06-09 11:45 BRT
-**Estado:** Servidores Operativos en Producción | Spec 40 Completado (Migración E2E a OpenRouter y Análisis de Facturación de Google).
+**Última actualización:** 2026-06-09 16:10 BRT  
+**Estado:** Servidores Operativos en Producción | Spec 41 Completado (Blindaje del Flujo de Agendamiento y Corrección de Bugs Críticos de la Máquina de Estados).
+
+---
+
+## 🎯 Spec 41: Blindaje del Flujo de Agendamiento — Sesión 2026-06-09
+
+**Objetivo:** Corregir todos los errores visuales y de estado detectados durante la prueba manual del flujo de agendamiento post-pago, y agregar un nuevo estado de confirmación antes de ejecutar la reserva en Google Calendar.
+
+### Bugs Detectados y Resueltos
+
+#### Bug 1 — `"lunes 15 a las 8am"` no encontraba el slot (`location_service.py`)
+- **Síntoma:** El sistema respondía que el horario no estaba disponible al escribir `"8am"` pegado (sin espacio).
+- **Causa Raíz:** `re.findall(r'\b(\d{1,2})\b')` no detecta `8` cuando está pegado a `"am"`. Solo encontraba `15` (el día), lo excluía como día-del-mes, y retornaba `None`.
+- **Fix:** Una línea de preprocesamiento en `find_matching_slot()`: `re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', normalized)` → `"8am"` → `"8 am"`.
+- **Archivos:** `api/services/location_service.py` — Línea 266.
+- **Tests:** Todos los tests unitarios de `test_timezone_scheduling.py` pasan al 100%.
+
+#### Bug 2 — Doble envío de mensaje/audio (`message_processor.py`)
+- **Síntoma:** Dos mensajes idénticos llegando al usuario con `1ms` de diferencia (texto + audio dos veces).
+- **Causa Raíz:** Dos eventos del webhook llegaron casi simultáneamente. El debounce los agrupó en el mismo buffer, pero el pipeline se ejecutaba dos veces en paralelo porque el lock del buffer solo protegía la escritura, no la ejecución.
+- **Fix:** Nuevo `set` global `_active_pipelines`. Si ya hay un pipeline activo para un `sender_id`, la segunda invocación se descarta.
+- **Archivos:** `api/services/message_processor.py` — Líneas 32, 131-134, 968.
+
+#### Bug 3 — Prefijo interno `[Mensaje de texto independiente]:` visible al usuario
+- **Síntoma:** El bot enviaba `"Gracias, [Mensaje de texto independiente]: oriundo locota. Ahora por favor..."` al usuario.
+- **Causa Raíz:** En `BOOKING_PENDING_NAME` se usaba `text_body.strip()` directo como nombre. `text_body` contiene el tag interno de múltiples mensajes del buffer que el LLM usa para contexto.
+- **Fix:** Strip del prefijo antes de extraer el valor en ambos estados (`BOOKING_PENDING_NAME` y `BOOKING_PENDING_EMAIL`).
+- **Archivos:** `api/services/message_processor.py` — Líneas 651-656 y 690-696.
+
+#### Bug 4 — Confirmación con placeholders literales `[Fecha]`, `[Hora]`, `[Nombre]`
+- **Síntoma:** Bot enviaba `"Confirmemos tus datos: Cita para el [Fecha] a las [Hora], Nombre: [Oriundo Locota]..."` con corchetes literales.
+- **Causa Raíz:** El system prompt le daba al LLM un template con marcadores `[Fecha]`/`[Hora]` que él interpretaba como texto fijo, no como variables a rellenar.
+- **Fix Arquitectónico:** Se eliminó el template del LLM y se creó un nuevo estado determinista `BOOKING_CONFIRMING` en el backend que construye el resumen con datos reales del slot, nombre y email.
+- **Archivos:** `api/services/message_processor.py` (nuevo estado `BOOKING_CONFIRMING` — ~120 líneas), `api/services/gemini_client.py` (PASO 2 del system prompt actualizado).
+
+#### Bug 5 — La columna `wa_name` es `VARCHAR(20)` en Supabase, bloqueando el avance de estado
+- **Síntoma:** Bot pedi¡ el correo dos veces. `"Gracias, oruspgutierrez@gmail.com. Ahora, por favor facilítame tu correo..."` — tratando el email como un nombre.
+- **Causa Raíz:** El update de Supabase era un único call `{wa_name, session_mode}`. La columna `wa_name VARCHAR(20)` rechazaba el valor (error `22001: value too long`). Al fallar el call único, el `session_mode` tampoco se actualizaba. El siguiente mensaje llegaba en estado `BOOKING_PENDING_NAME` y el email era tratado como nombre.
+- **Fix Código:** Se separaron los dos updates en llamadas independientes con sus propios `try/except`. El `session_mode` siempre avanza aunque `wa_name` falle.
+- **Fix DB Pendiente:** Ejecutar en Supabase SQL Editor:
+  ```sql
+  ALTER TABLE orus_users ALTER COLUMN wa_name TYPE VARCHAR(255);
+  ALTER TABLE orus_users ALTER COLUMN session_mode TYPE VARCHAR(50);
+  ```
+- **Archivos:** `api/services/message_processor.py` — Líneas 662-679.
+
+### Nuevo Flujo de Agendamiento (5 Estados Deterministas)
+
+```
+BOOKING_PENDING_NAME   → captura nombre limpio (sin prefijos internos)
+         ↓
+BOOKING_PENDING_EMAIL  → captura email, construye resumen REAL del backend:
+                          📅 Cita: Lunes 15 de Junio a las 8:00 am
+                          👤 Nombre: Fernando Gutierrez
+                          📧 Correo: usuario@gmail.com
+                          ¿Son correctos estos datos? Responde *Sí*
+         ↓
+BOOKING_CONFIRMING     → espera "sí/correcto/ok" → llama book_appointment
+                          si dice "no/error/cambiar" → vuelve a PENDING_NAME
+         ↓
+AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirmación
+```
+
+### Commits de la Sesión
+
+| SHA | Descripción |
+|-----|-------------|
+| `9a4bf46` | fix: separate digit-letter tokens in slot matching + prevent duplicate pipelines |
+| `d14f425` | fix: strip internal `[Mensaje de texto independiente]` prefix in booking name/email states |
+| `66389c4` | feat: add `BOOKING_CONFIRMING` state with real data confirmation before booking |
+| `a6281b9` | fix: split `wa_name` and `session_mode` updates to prevent state blocking on DB errors |
+
+### 🛠️ Tarea Pendiente para Inicio de Próxima Sesión
+
+> **EJECUTAR EN SUPABASE SQL EDITOR (OBLIGATORIO ANTES DE PRUEBAS):**
+> ```sql
+> ALTER TABLE orus_users ALTER COLUMN wa_name TYPE VARCHAR(255);
+> ALTER TABLE orus_users ALTER COLUMN session_mode TYPE VARCHAR(50);
+> ```
+> Sin este cambio, los nombres de más de 20 caracteres seguirán causando el error `22001` (el fix del código lo mitiga pero no lo elimina).
 
 ---
 
