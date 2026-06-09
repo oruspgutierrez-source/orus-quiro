@@ -521,7 +521,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                 # Si estamos esperando Nombre o Email, pero el usuario envía un mensaje que denota
                 # otra intención (cambio de hora, pregunta, queja, etc.), reseteamos el estado a AI
                 # para que sea procesado por el bloque conversacional/determinista estándar.
-                if session_mode in ['BOOKING_PENDING_NAME', 'BOOKING_PENDING_EMAIL']:
+                if session_mode in ['BOOKING_PENDING_NAME', 'BOOKING_PENDING_EMAIL', 'BOOKING_CONFIRMING']:
                     clean_msg = text_body
                     if "[Mensaje de texto independiente]:" in clean_msg:
                         clean_msg = clean_msg.split("[Mensaje de texto independiente]:", 1)[1]
@@ -695,7 +695,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                         raw_email_text = raw_email_text.split("[NOTA: ")[0].strip()
                     email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw_email_text)
                     if not email_match:
-                        reply_msg = "Por favor, facilítame un correo electrónico válido (por ejemplo: usuario@gmail.com) para poder completar el registro de tu cita."
+                        reply_msg = "Por favor, facílitame un correo electrónico válido (por ejemplo: usuario@gmail.com) para poder completar el registro de tu cita."
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)
                         return
                     
@@ -719,8 +719,133 @@ async def _process_buffer(sender_id: str, payload: dict):
                             pass
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)
                         return
-                    
-                    print(f"[Booking] Registrando cita para {user_name} en slot {pending_slot} con email {email_provided}", flush=True)
+
+                    # Formatear fecha y hora del slot para mostrar al usuario
+                    DAYS_ES_CONF = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                    MONTHS_ES_CONF = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                    try:
+                        from zoneinfo import ZoneInfo
+                        slot_dt = datetime.fromisoformat(pending_slot)
+                        tz = ZoneInfo(timezone or "America/Sao_Paulo")
+                        slot_local = slot_dt.astimezone(tz)
+                        day_name_c = DAYS_ES_CONF[slot_local.weekday()]
+                        month_name_c = MONTHS_ES_CONF[slot_local.month - 1]
+                        hour_c = slot_local.hour
+                        minute_c = slot_local.minute
+                        ampm = "am" if hour_c < 12 else "pm"
+                        display_hour = hour_c if hour_c <= 12 else hour_c - 12
+                        if display_hour == 0:
+                            display_hour = 12
+                        time_str_c = f"{display_hour}:{minute_c:02d} {ampm}"
+                        date_str_c = f"{day_name_c} {slot_local.day} de {month_name_c}"
+                    except Exception as fmt_err:
+                        print(f"Error formateando slot para confirmación: {fmt_err}", flush=True)
+                        date_str_c = pending_slot
+                        time_str_c = ""
+
+                    # Guardar email y cambiar estado a BOOKING_CONFIRMING
+                    try:
+                        supabase.table('orus_users').update({
+                            'session_mode': 'BOOKING_CONFIRMING',
+                            'pending_appointment': pending_slot  # ya estaba guardado, reafirmar
+                        }).eq('id', user_uuid).execute()
+                        # Guardar email temporalmente reutilizando wa_name como paréntesis
+                        # Guardamos email en una variable de sesión via pending_appointment metadata
+                    except Exception as e:
+                        print(f"Error actualizando estado a BOOKING_CONFIRMING: {e}", flush=True)
+
+                    # Guardar email en DB para usarlo en la confirmación
+                    try:
+                        supabase.table('orus_users').update({'session_mode': 'BOOKING_CONFIRMING'}).eq('id', user_uuid).execute()
+                        # Persistir email en orus_messages como mensaje especial de sistema
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'user',
+                            'content': text_body
+                        }).execute()
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'assistant',
+                            'content': f'[EMAIL_TEMPORAL:{email_provided}]'
+                        }).execute()
+                    except Exception:
+                        pass
+
+                    reply_msg = (
+                        f"Confirmemos tus datos:\n"
+                        f"\U0001f4c5 Cita: {date_str_c} a las {time_str_c}\n"
+                        f"\U0001f464 Nombre: {user_name}\n"
+                        f"\U0001f4e7 Correo: {email_provided}\n\n"
+                        f"\u00bfSon correctos estos datos? Responde *Sí* para confirmar o indícame qué corregir."
+                    )
+                    await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                    try:
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'assistant',
+                            'content': reply_msg
+                        }).execute()
+                    except Exception:
+                        pass
+                    return
+
+                # 3b. State: Booking Confirming — espera el "Sí" del usuario
+                elif session_mode == 'BOOKING_CONFIRMING':
+                    confirmation_keywords = ['sí', 'si', 'correcto', 'correctos', 'ok', 'dale', 'confirmo', 'confirmar', 'yes', 'listo', 'va', 'así es', 'asi es']
+                    correction_keywords = ['no', 'cambiar', 'cambia', 'error', 'incorrecto', 'otro', 'otra', 'equivocado', 'equivocada', 'modif']
+
+                    clean_conf = text_lower.strip()
+                    is_confirmed = any(kw in clean_conf for kw in confirmation_keywords)
+                    is_correction = any(kw in clean_conf for kw in correction_keywords)
+
+                    if is_correction:
+                        # Volver a pedir nombre
+                        try:
+                            supabase.table('orus_users').update({'session_mode': 'BOOKING_PENDING_NAME'}).eq('id', user_uuid).execute()
+                        except Exception:
+                            pass
+                        reply_msg = "Entendido. ¿Por favor, díme tu nombre completo nuevamente para corregirlo?"
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+
+                    if not is_confirmed:
+                        # No es ni confirmación ni corrección clara — preguntar de nuevo
+                        reply_msg = "Responde *Sí* para confirmar tu cita o indícame qué dato es incorrecto."
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+
+                    # Usuario confirmó: recuperar email del historial de mensajes
+                    pending_slot = None
+                    user_name = "Consultante"
+                    email_provided = None
+                    try:
+                        user_info = supabase.table('orus_users').select('pending_appointment, wa_name').eq('id', user_uuid).execute()
+                        if user_info.data:
+                            pending_slot = user_info.data[0].get('pending_appointment')
+                            user_name = user_info.data[0].get('wa_name') or "Consultante"
+                    except Exception as e:
+                        print(f"Error obteniendo cita pendiente en CONFIRMING: {e}", flush=True)
+
+                    # Recuperar email del historial de mensajes
+                    try:
+                        email_msgs = supabase.table('orus_messages').select('content').eq('user_id', user_uuid).like('content', '[EMAIL_TEMPORAL:%').order('created_at', desc=True).limit(1).execute()
+                        if email_msgs.data:
+                            raw_email_content = email_msgs.data[0]['content']
+                            # Formato: [EMAIL_TEMPORAL:usuario@example.com]
+                            email_provided = raw_email_content.replace('[EMAIL_TEMPORAL:', '').rstrip(']')
+                    except Exception as e:
+                        print(f"Error recuperando email temporal: {e}", flush=True)
+
+                    if not pending_slot or not email_provided:
+                        reply_msg = "Ha ocurrido un error recuperando tus datos. Por favor, vuelve a indicar el día y hora que deseas agendar."
+                        try:
+                            supabase.table('orus_users').update({'session_mode': 'AI'}).eq('id', user_uuid).execute()
+                        except Exception:
+                            pass
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+
+                    print(f"[Booking CONFIRMING] Registrando cita para {user_name} en slot {pending_slot} con email {email_provided}", flush=True)
                     try:
                         supabase.table('orus_messages').insert({
                             'user_id': user_uuid,
@@ -736,7 +861,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                         name=user_name,
                         email=email_provided
                     )
-                    
+
                     if "ÉXITO" in booking_result or "[AGENDA_COMPLETA]" in booking_result:
                         try:
                             supabase.table('orus_users').update({
@@ -746,11 +871,42 @@ async def _process_buffer(sender_id: str, payload: dict):
                             }).eq('id', user_uuid).execute()
                         except Exception as e:
                             print(f"Error limpiando estado de agendamiento: {e}", flush=True)
+                        DAYS_ES_OK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                        MONTHS_ES_OK = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                        try:
+                            from zoneinfo import ZoneInfo
+                            slot_dt = datetime.fromisoformat(pending_slot)
+                            tz = ZoneInfo(timezone or "America/Sao_Paulo")
+                            slot_local = slot_dt.astimezone(tz)
+                            day_name_ok = DAYS_ES_OK[slot_local.weekday()]
+                            month_name_ok = MONTHS_ES_OK[slot_local.month - 1]
+                            hour_ok = slot_local.hour
+                            ampm_ok = "am" if hour_ok < 12 else "pm"
+                            dh_ok = hour_ok if hour_ok <= 12 else hour_ok - 12
+                            if dh_ok == 0: dh_ok = 12
+                            time_ok = f"{dh_ok}:{slot_local.minute:02d} {ampm_ok}"
+                            date_ok = f"{day_name_ok} {slot_local.day} de {month_name_ok}"
+                        except Exception:
+                            date_ok = pending_slot
+                            time_ok = ""
+                        confirm_msg = (
+                            f"¡Tu cita ha sido registrada exitosamente! \U0001f4c5\n"
+                            f"*{date_ok} a las {time_ok}*\n"
+                            f"Recibirás todos los detalles en {email_provided}.\n\n"
+                            f"Si necesitas reagendar o tienes alguna duda, escríbeme aquí."
+                        )
+                        await wa_client.send_message(to=real_sender_id, text=confirm_msg)
+                        try:
+                            supabase.table('orus_messages').insert({
+                                'user_id': user_uuid,
+                                'role': 'assistant',
+                                'content': confirm_msg
+                            }).execute()
+                        except Exception:
+                            pass
                     else:
                         reply_msg = f"Hubo un problema al registrar la cita en el calendario: {booking_result}. Por favor, vuelve a intentarlo o solicita asistencia."
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)
-                        return
-                    
                     return
 
                 # 4. Standard Booking Intentions (Timezone is already set)
