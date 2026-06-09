@@ -1,7 +1,16 @@
 # Bitácora de Sesión — Orus Quiro Bot
 
-**Última actualización:** 2026-06-08 19:10 BRT
-**Estado:** Servidores Operativos en Producción | Spec 35 Completado (Enlace de Agendamiento, Validación de Reserva y Reglas de Exclusión Contextuales).
+**Última actualización:** 2026-06-09 11:45 BRT
+**Estado:** Servidores Operativos en Producción | Spec 40 Completado (Migración E2E a OpenRouter y Análisis de Facturación de Google).
+
+---
+
+## 🎯 Spec 40 Activo: Activación de OpenRouter y Análisis de Facturación (Google AI Studio vs. OpenRouter)
+
+**Objetivos Estratégicos Acordados:**
+1. **[X] Migración E2E a OpenRouter:** Blindar el sistema migrando todas las llamadas de IA del backend (incluyendo el endpoint de análisis de logs `/api/logs/analyze`) a OpenRouter, unificando la API de inferencia.
+2. **[X] Análisis de Facturación y Prepago de Google:** Investigar y clarificar los requisitos de cobro prepagado implementados por Google AI Studio ($10 USD / R$ 100 mínimos).
+3. **[X] Análisis de Token Limit en LLMs:** Documentar y dar respuesta técnica sobre si aumentar el límite de tokens en la llamada de la API (`max_tokens`) induce respuestas más largas en el modelo.
 
 ---
 

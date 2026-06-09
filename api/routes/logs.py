@@ -45,9 +45,11 @@ def get_logs(
 @router.post("/analyze")
 async def analyze_log(req: LogAnalyzeRequest):
     try:
-        from google import genai
+        import httpx
         import os
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
         
         prompt = f"""
 Eres el ingeniero principal de infraestructura de Orus Quiro.
@@ -59,13 +61,29 @@ Error Técnico:
 Código / Stack trace:
 {req.stack_trace or 'No disponible'}
 """
-        response = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        return {"analysis": response.text}
+        headers = {
+            "Authorization": f"Bearer {openrouter_key}",
+            "HTTP-Referer": "https://api.orusquiroterapia.online",
+            "X-Title": "Orus Quiroterapia Bot",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": openrouter_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 500
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as http_client:
+            r = await http_client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+            if r.status_code != 200:
+                raise Exception(f"OpenRouter returned status {r.status_code}: {r.text}")
+            res_data = r.json()
+            analysis_text = res_data["choices"][0]["message"]["content"]
+            
+        return {"analysis": analysis_text}
     except Exception as e:
-        print(f"Error analizando log con IA: {e}")
+        print(f"Error analizando log con IA (OpenRouter): {e}")
         raise HTTPException(status_code=500, detail="Error al conectar con la IA de análisis.")
 
 @router.delete("/{log_id}")
