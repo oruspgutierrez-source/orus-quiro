@@ -660,12 +660,22 @@ async def _process_buffer(sender_id: str, payload: dict):
                         return
                     
                     try:
+                        # Truncar nombre a 100 chars por seguridad
+                        name_to_save = name_provided[:100]
                         supabase.table('orus_users').update({
-                            'wa_name': name_provided,
+                            'wa_name': name_to_save
+                        }).eq('id', user_uuid).execute()
+                        name_provided = name_to_save
+                    except Exception as e:
+                        print(f"Error actualizando wa_name: {e}", flush=True)
+
+                    # Actualizar session_mode por separado para que nunca quede bloqueado
+                    try:
+                        supabase.table('orus_users').update({
                             'session_mode': 'BOOKING_PENDING_EMAIL'
                         }).eq('id', user_uuid).execute()
                     except Exception as e:
-                        print(f"Error actualizando nombre temporal: {e}", flush=True)
+                        print(f"Error actualizando session_mode a BOOKING_PENDING_EMAIL: {e}", flush=True)
                         
                     reply_msg = f"Gracias, {name_provided}. Ahora, por favor facilítame tu correo electrónico para enviarte los detalles y el acceso a la sesión."
                     try:
