@@ -257,7 +257,7 @@ def find_matching_date(text: str, cached_slots: dict) -> Optional[str]:
                     
     return None
 
-def find_matching_slot(text: str, slots: List[Dict]) -> Optional[Dict]:
+def find_matching_slot(text: str, slots: List[Dict], matched_date: Optional[str] = None) -> Optional[Dict]:
     """
     Busca si en la lista de slots disponibles para un día hay alguno que coincida
     con la hora especificada por el usuario.
@@ -285,7 +285,18 @@ def find_matching_slot(text: str, slots: List[Dict]) -> Optional[Dict]:
 
     # Buscar números individuales que representen la hora
     numbers = [int(n) for n in re.findall(r'\b(\d{1,2})\b', normalized)]
+    
+    # Si tenemos matched_date, excluir el día del mes para evitar falsos positivos de hora (ej: "15 de junio a las 8")
+    exclude_day = None
+    if matched_date:
+        try:
+            exclude_day = datetime.strptime(matched_date, "%Y-%m-%d").day
+        except Exception:
+            pass
+
     for num in numbers:
+        if exclude_day is not None and num == exclude_day:
+            continue
         # Una hora hábil razonable suele estar entre 1 y 23.
         if num < 1 or num > 23:
             continue

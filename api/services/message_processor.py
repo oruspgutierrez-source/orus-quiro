@@ -509,6 +509,54 @@ async def _process_buffer(sender_id: str, payload: dict):
                 elif not user_cached:
                     user_cached = {}
 
+                # ── Pre-check: Switch Determinista Activo ─────────────────────
+                # Si estamos esperando Nombre o Email, pero el usuario envía un mensaje que denota
+                # otra intención (cambio de hora, pregunta, queja, etc.), reseteamos el estado a AI
+                # para que sea procesado por el bloque conversacional/determinista estándar.
+                if session_mode in ['BOOKING_PENDING_NAME', 'BOOKING_PENDING_EMAIL']:
+                    clean_msg = text_body
+                    if "[Mensaje de texto independiente]:" in clean_msg:
+                        clean_msg = clean_msg.split("[Mensaje de texto independiente]:", 1)[1]
+                    if "[NOTA: " in clean_msg:
+                        clean_msg = clean_msg.split("[NOTA: ", 1)[0]
+                    clean_msg = clean_msg.strip()
+                    clean_msg_lower = clean_msg.lower()
+
+                    has_digits = bool(re.search(r'\d', clean_msg))
+                    has_question = "?" in clean_msg
+                    change_keywords = ["no", "cambiar", "otra", "diferente", "error", "equivocado", "equivoque", "corregir", "cancelar", "horario", "fecha", "hora", "disponibilidad", "quien", "quién"]
+                    has_change_keyword = any(kw in clean_msg_lower for kw in change_keywords)
+                    matched_date = find_matching_date(clean_msg, user_cached)
+
+                    should_reset = False
+                    if session_mode == 'BOOKING_PENDING_NAME':
+                        should_reset = (
+                            has_digits or 
+                            has_question or 
+                            has_change_keyword or 
+                            matched_date is not None or 
+                            len(clean_msg) > 50
+                        )
+                    elif session_mode == 'BOOKING_PENDING_EMAIL':
+                        has_email = bool(re.search(r'[\w\.-]+@[\w\.-]+\.\w+', clean_msg))
+                        if not has_email:
+                            should_reset = (
+                                has_question or 
+                                has_change_keyword or 
+                                matched_date is not None or 
+                                len(clean_msg) > 15
+                            )
+                    
+                    if should_reset:
+                        print(f"[Switch] Detectada intención alternativa en estado {session_mode}. Reseteando a AI.", flush=True)
+                        session_mode = 'AI'
+                        try:
+                            supabase.table('orus_users').update({
+                                'session_mode': 'AI'
+                            }).eq('id', user_uuid).execute()
+                        except Exception as e:
+                            print(f"Error reseteando estado a AI: {e}", flush=True)
+
                 # 1. State: Timezone/Country onboarding
                 if not country or not timezone:
                     detected_country, detected_tz = detect_country_and_timezone(text_body)
@@ -690,7 +738,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                     matched_date = find_matching_date(text_body, user_cached)
                     if matched_date:
                         day_slots = user_cached[matched_date]
-                        matched_slot = find_matching_slot(text_body, day_slots)
+                        matched_slot = find_matching_slot(text_body, day_slots, matched_date)
                         
                         DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                         MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
