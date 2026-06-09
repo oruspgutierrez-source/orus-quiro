@@ -263,6 +263,8 @@ def find_matching_slot(text: str, slots: List[Dict], matched_date: Optional[str]
     con la hora especificada por el usuario.
     """
     normalized = normalize_text(text)
+    # Separar dígitos pegados a letras (ej: "8am" → "8 am", "3pm" → "3 pm")
+    normalized = re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', normalized)
     
     # Detectar si se menciona PM o AM
     is_pm = any(p in normalized for p in ["pm", "tarde", "noche"])

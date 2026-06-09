@@ -28,6 +28,8 @@ _debounce_timers: dict[str, asyncio.Task] = {}
 _message_buffers: dict[str, list[dict]] = {}
 # Lock por usuario para evitar condiciones de carrera en el buffer
 _buffer_locks: dict[str, asyncio.Lock] = {}
+# Pipelines activos: evita que un mismo usuario tenga dos pipelines corriendo en paralelo
+_active_pipelines: set[str] = set()
 
 
 
@@ -124,6 +126,12 @@ async def _process_buffer(sender_id: str, payload: dict):
     
     if not buffer_items:
         return
+
+    # Evitar pipeline duplicado: si ya hay uno activo para este sender, no lanzar otro
+    if sender_id in _active_pipelines:
+        print(f"[Processor] Pipeline ya activo para {sender_id}, descartando duplicado.", flush=True)
+        return
+    _active_pipelines.add(sender_id)
 
     # ── Reconstruir flujo secuencial de media y texto ──────────────────────
     text_parts = []
@@ -956,3 +964,5 @@ async def _process_buffer(sender_id: str, payload: dict):
 
     except Exception as e:
         print(f"[Processor] Error crítico en pipeline: {e}", flush=True)
+    finally:
+        _active_pipelines.discard(sender_id)
