@@ -310,23 +310,21 @@ ESTRUCTURA DEL JSON:
         "generate_payment_link": generate_payment_link
     }
 
-    # Traducir historial a formato de OpenRouter/OpenAI
+    # Traducir historial a formato de OpenRouter/OpenAI (todo en texto plano)
     messages = [{"role": "system", "content": system_rules}]
     
     if history:
         for msg in history:
             msg_text = msg["text"]
-            # Asegurar que el rol 'model' de Gemini se guarde envuelto en JSON para consistencia
-            if msg["role"] == "model":
-                role = "assistant"
-                if not msg_text.strip().startswith("{"):
-                    msg_text = json.dumps({
-                        "reply": msg_text,
-                        "sentiment": "Neutral",
-                        "requires_human": False
-                    }, ensure_ascii=False)
-            else:
-                role = "user"
+            role = "assistant" if msg["role"] == "model" else "user"
+            
+            # Si el texto ya viene formateado en JSON por alguna razón, extraemos el reply
+            if msg_text.strip().startswith("{"):
+                try:
+                    parsed = json.loads(msg_text)
+                    msg_text = parsed.get("reply", msg_text)
+                except Exception:
+                    pass
                 
             messages.append({"role": role, "content": msg_text})
 
@@ -385,7 +383,8 @@ ESTRUCTURA DEL JSON:
                 "model": OPENROUTER_MODEL,
                 "messages": messages,
                 "tools": OPENAI_TOOLS,
-                "tool_choice": "auto"
+                "tool_choice": "auto",
+                "max_tokens": 1000
             }
             
             # Forzar formato JSON en modelos compatibles
@@ -393,18 +392,59 @@ ESTRUCTURA DEL JSON:
                 payload["response_format"] = {"type": "json_object"}
                 
             print(f"[OpenRouter] Enviando solicitud a {OPENROUTER_MODEL} (Turno {turn + 1})...", flush=True)
-            r = await http_client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
             
-            if r.status_code != 200:
-                err_text = r.text
-                print(f"[OpenRouter Error] Status {r.status_code}: {err_text}", flush=True)
-                raise Exception(f"OpenRouter API error: {err_text}")
+            # Bucle de reintento ante respuestas truncadas
+            attempts = 2
+            content = ""
+            tool_calls = []
+            
+            for attempt in range(attempts):
+                r = await http_client.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
                 
-            res_data = r.json()
-            choice = res_data["choices"][0]
-            message_res = choice["message"]
-            content = message_res.get("content") or ""
-            tool_calls = message_res.get("tool_calls") or []
+                if r.status_code != 200:
+                    err_text = r.text
+                    print(f"[OpenRouter Error] Status {r.status_code}: {err_text}", flush=True)
+                    raise Exception(f"OpenRouter API error: {err_text}")
+                    
+                res_data = r.json()
+                choice = res_data["choices"][0]
+                message_res = choice["message"]
+                content = message_res.get("content") or ""
+                tool_calls = message_res.get("tool_calls") or []
+                
+                # Si hay llamadas a herramientas, omitimos validación de truncamiento y salimos
+                if tool_calls:
+                    break
+                    
+                # Validar si el JSON final está truncado
+                raw_text = content.strip()
+                is_truncated = False
+                
+                # Criterio de truncamiento: comienza con { o tiene marcas de JSON pero no cierra con }
+                if raw_text.startswith("{") and not raw_text.endswith("}"):
+                    is_truncated = True
+                elif not raw_text.startswith("{") and not raw_text.endswith("}"):
+                    if '"reply":' in raw_text or '"sentiment":' in raw_text:
+                        is_truncated = True
+                        
+                if is_truncated and attempt < attempts - 1:
+                    print(f"[OpenRouter Warning] Respuesta truncada detectada (Intento {attempt + 1}/{attempts}). Reintentando con alerta de concisión...", flush=True)
+                    print(f"[OpenRouter DEBUG Truncado] Content: {raw_text}", flush=True)
+                    
+                    # Inyectar instrucción de concisión en el último mensaje de usuario
+                    for msg in reversed(payload["messages"]):
+                        if msg["role"] == "user":
+                            if isinstance(msg["content"], list):
+                                for part in msg["content"]:
+                                    if part.get("type") == "text":
+                                        part["text"] += "\n\n[SISTEMA - ALERTA]: Tu respuesta anterior fue cortada por el límite de caracteres. Por favor, genera la respuesta de nuevo, sé mucho más conciso para asegurar que quepa completa y con formato JSON válido."
+                            else:
+                                msg["content"] += "\n\n[SISTEMA - ALERTA]: Tu respuesta anterior fue cortada por el límite de caracteres. Por favor, genera la respuesta de nuevo, sé mucho más conciso para asegurar que quepa completa y con formato JSON válido."
+                            break
+                    # Volver a llamar en la siguiente iteración
+                    continue
+                else:
+                    break
             
             print(f"[OpenRouter DEBUG] Content: {content}", flush=True)
             if tool_calls:
@@ -437,18 +477,106 @@ ESTRUCTURA DEL JSON:
                 # Limpiar Markdown
                 if raw_text.startswith("```json"):
                     raw_text = raw_text[7:]
-                if raw_text.startswith("```"):
-                    raw_text = raw_text[3:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                
-                import re
-                match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-                if match:
-                    raw_text = match.group(0)
-                
+                    parsed_json = None
                 try:
                     parsed_json = json.loads(raw_text.strip())
+                except Exception as json_err:
+                    print(f"[OpenRouter] JSON estándar falló ({json_err}). Intentando parseador robusto...", flush=True)
+                    # Intentar extraer campos manualmente
+                    reply_content = None
+                    sentiment_content = "Neutral"
+                    requires_human_content = True
+                    
+                    # Buscar reply
+                    reply_start_marker = '"reply":'
+                    if reply_start_marker not in raw_text:
+                        reply_start_marker = "'reply':"
+                        
+                    if reply_start_marker in raw_text:
+                        idx = raw_text.find(reply_start_marker)
+                        val_start = raw_text.find('"', idx + len(reply_start_marker))
+                        if val_start == -1:
+                            val_start = raw_text.find("'", idx + len(reply_start_marker))
+                        if val_start != -1:
+                            sent_marker_pos = -1
+                            for marker in ['"sentiment"', "'sentiment'", '"requires_human"', "'requires_human'"]:
+                                pos = raw_text.rfind(marker)
+                                if pos > val_start:
+                                    sent_marker_pos = pos
+                                    break
+                            
+                            if sent_marker_pos != -1:
+                                sub = raw_text[val_start+1:sent_marker_pos].strip()
+                                if sub.endswith(','):
+                                    sub = sub[:-1].strip()
+                                if sub.endswith('"') or sub.endswith("'"):
+                                    sub = sub[:-1]
+                                reply_content = sub
+                            else:
+                                sub = raw_text[val_start+1:].strip()
+                                if sub.endswith('}'):
+                                    sub = sub[:-1].strip()
+                                if sub.endswith('"') or sub.endswith("'"):
+                                    sub = sub[:-1]
+                                reply_content = sub
+
+                    # Buscar sentiment
+                    for marker in ['"sentiment"', "'sentiment'"]:
+                        if marker in raw_text:
+                            idx = raw_text.find(marker)
+                            val_start = raw_text.find('"', idx + len(marker))
+                            if val_start == -1:
+                                val_start = raw_text.find("'", idx + len(marker))
+                            if val_start != -1:
+                                quote_char = raw_text[val_start]
+                                next_comma = raw_text.find(',', val_start)
+                                next_brace = raw_text.find('}', val_start)
+                                limit = min(next_comma if next_comma != -1 else len(raw_text), next_brace if next_brace != -1 else len(raw_text))
+                                val_end = raw_text.find(quote_char, val_start + 1, limit)
+                                if val_end != -1:
+                                    sentiment_content = raw_text[val_start+1:val_end]
+                                else:
+                                    sentiment_content = raw_text[val_start+1:limit].strip().replace('"', '').replace("'", "")
+
+                    # Buscar requires_human
+                    for marker in ['"requires_human"', "'requires_human'"]:
+                        if marker in raw_text:
+                            idx = raw_text.find(marker)
+                            colon_idx = raw_text.find(':', idx)
+                            if colon_idx != -1:
+                                sub = raw_text[colon_idx+1:].strip().lower()
+                                if 'true' in sub:
+                                    requires_human_content = True
+                                elif 'false' in sub:
+                                    requires_human_content = False
+
+                    if reply_content is not None:
+                        parsed_json = {
+                            "reply": reply_content,
+                            "sentiment": sentiment_content,
+                            "requires_human": requires_human_content
+                        }
+                    else:
+                        if not raw_text.startswith("{"):
+                            cleaned_reply = raw_text.strip()
+                            for marker in [', "sentiment"', ",'sentiment'", ', "requires_human"', ",'requires_human'"]:
+                                pos = cleaned_reply.rfind(marker)
+                                if pos != -1:
+                                    cleaned_reply = cleaned_reply[:pos].strip()
+                            if cleaned_reply.endswith('"') or cleaned_reply.endswith("'"):
+                                cleaned_reply = cleaned_reply[:-1]
+                            parsed_json = {
+                                "reply": cleaned_reply,
+                                "sentiment": sentiment_content,
+                                "requires_human": requires_human_content
+                            }
+                    if parsed_json is not None:
+                        parsed_json["requires_human"] = True
+
+                try:
+                    if parsed_json is None:
+                        raise Exception("No se pudo estructurar ni reparar la respuesta.")
+
                     if not parsed_json.get("reply", "").endswith("[##EOS##]"):
                         parsed_json["reply"] = parsed_json.get("reply", "") + " [##EOS##]"
                     
@@ -475,37 +603,7 @@ ESTRUCTURA DEL JSON:
 
                     return parsed_json
                 except Exception as e:
-                    print(f"[OpenRouter] Error parseando JSON: {e}\nRaw: {raw_text}")
-                    if raw_text and not raw_text.startswith("{"):
-                        safe_reply = raw_text.strip()
-                        if not safe_reply.endswith("[##EOS##]"):
-                            safe_reply += " [##EOS##]"
-                        
-                        import re
-                        jid_match = re.search(r'JID=([^\]\s]+)', prompt)
-                        to_number = jid_match.group(1) if jid_match else None
-                        if to_number:
-                            if "[AUDIO_ENVIADO]" in safe_reply and last_executed_tool != "send_introductory_audio":
-                                print(f"[Safety Net] LLM omitió llamada a send_introductory_audio pero devolvió [AUDIO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
-                                try:
-                                    await send_introductory_audio(to_number)
-                                    last_executed_tool = "send_introductory_audio"
-                                except Exception as ex:
-                                    print(f"[Safety Net Error] Al ejecutar send_introductory_audio: {ex}", flush=True)
-                            elif "[COBRO_ENVIADO]" in safe_reply and last_executed_tool != "generate_payment_link":
-                                print(f"[Safety Net] LLM omitió llamada a generate_payment_link pero devolvió [COBRO_ENVIADO]. Ejecutando herramienta programáticamente.", flush=True)
-                                try:
-                                    await generate_payment_link(to_number)
-                                    last_executed_tool = "generate_payment_link"
-                                except Exception as ex:
-                                    print(f"[Safety Net Error] Al ejecutar generate_payment_link: {ex}", flush=True)
-
-                        return {
-                            "reply": safe_reply,
-                            "sentiment": "Neutral",
-                            "requires_human": False
-                        }
-                    
+                    print(f"[OpenRouter] Error final procesando/reparando JSON: {e}\nRaw: {raw_text}", flush=True)
                     return {
                         "reply": "Lo siento, tuve un error interno procesando la respuesta. [##EOS##]",
                         "sentiment": "Neutral",

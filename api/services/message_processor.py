@@ -30,108 +30,7 @@ _message_buffers: dict[str, list[dict]] = {}
 _buffer_locks: dict[str, asyncio.Lock] = {}
 
 
-def try_extract_slots_for_user_date(user_msg: str, user_uuid: str) -> str | None:
-    """
-    Analiza el mensaje del usuario y busca si eligió un día pero no especificó la hora.
-    Si es así, busca el último mensaje del asistente con la tabla de disponibilidad en Supabase,
-    extrae las horas disponibles para ese día específico y las retorna formateadas.
-    """
-    text_lower = user_msg.lower()
-    
-    # 1. Verificar si ya especificó la hora. Si tiene "am", "pm", "hs", etc., no interceptar.
-    hour_patterns = [
-        r'\b\d{1,2}\s*(?:am|pm|hs|horario|horas|h)\b',
-        r'\b\d{1,2}\s*:\s*\d{2}\b',
-        r'a las \d{1,2}',
-        r'las \d{1,2}'
-    ]
-    for pattern in hour_patterns:
-        if re.search(pattern, text_lower):
-            return None
 
-    # 2. Buscar si el usuario mencionó algún número de día (ej: 8, 9, 12, 13) o nombre de día (lunes, martes, etc.)
-    day_numbers = re.findall(r'\b([1-9]|[12]\d|3[01])\b', text_lower)
-    day_names = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo']
-    mentioned_days = [d for d in day_names if d in text_lower]
-    
-    if not day_numbers and not mentioned_days:
-        return None
-
-    # 3. Buscar en Supabase el último mensaje del asistente con la tabla de disponibilidad
-    try:
-        res = supabase.table('orus_messages')\
-            .select('content')\
-            .eq('user_id', user_uuid)\
-            .eq('role', 'assistant')\
-            .ilike('content', '%horarios disponibles%')\
-            .order('created_at', desc=True)\
-            .limit(1)\
-            .execute()
-            
-        if not res.data:
-            res = supabase.table('orus_messages')\
-                .select('content')\
-                .eq('user_id', user_uuid)\
-                .eq('role', 'assistant')\
-                .ilike('content', '%Mañana:%')\
-                .order('created_at', desc=True)\
-                .limit(1)\
-                .execute()
-                
-        if not res.data:
-            return None
-            
-        last_slots_msg = res.data[0]['content']
-    except Exception as e:
-        print(f"[Slots Interceptor Error] Fallo al consultar Supabase: {e}", flush=True)
-        return None
-
-    # 4. Dividir por líneas e intentar emparejar
-    lines = last_slots_msg.split('\n')
-    target_line_idx = -1
-    for idx, line in enumerate(lines):
-        line_lower = line.lower()
-        num_match = False
-        if day_numbers:
-            for num in day_numbers:
-                if re.search(r'\b' + num + r'\b', line_lower):
-                    num_match = True
-                    break
-        name_match = False
-        if mentioned_days:
-            for name in mentioned_days:
-                norm_line = line_lower.replace('é', 'e').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-                norm_name = name.replace('é', 'e').replace('á', 'a').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-                if norm_name in norm_line:
-                    name_match = True
-                    break
-                    
-        if num_match or name_match:
-            target_line_idx = idx
-            break
-            
-    if target_line_idx == -1:
-        return None
-        
-    day_header = lines[target_line_idx].strip().rstrip(':').rstrip('.')
-    
-    available_hours = []
-    for i in range(target_line_idx + 1, len(lines)):
-        line = lines[i].strip()
-        if not line:
-            continue
-        # Si la línea parece el encabezado de otro día, paramos
-        if ':' in line and not any(kw in line.lower() for kw in ['mañana', 'tarde', 'am', 'pm']):
-            break
-        hours_found = re.findall(r'\b\d{1,2}(?:am|pm)\b', line.lower())
-        available_hours.extend(hours_found)
-        
-    if not available_hours:
-        return None
-        
-    hours_str = ", ".join(available_hours)
-    # Formatear tal cual el requerimiento: "en el dia [Día] tenemos disponibles estas horas: [Horas]"
-    return f"en el dia {day_header} tenemos disponibles estas horas: {hours_str}"
 
 
 def _get_lock(sender_id: str) -> asyncio.Lock:
@@ -343,8 +242,11 @@ async def _process_buffer(sender_id: str, payload: dict):
         session_mode = 'AI'
         payment_status = 'pending'
         appointment_date = None
+        country = None
+        timezone = None
+        cached_slots = None
         try:
-            user_check = supabase.table('orus_users').select('id, is_blocked, session_mode, payment_status, appointment_date').eq('phone_number', real_sender_id).execute()
+            user_check = supabase.table('orus_users').select('id, is_blocked, session_mode, payment_status, appointment_date, country, timezone, cached_slots').eq('phone_number', real_sender_id).execute()
             if user_check.data:
                 user_data = user_check.data[0]
                 if user_data.get('is_blocked'):
@@ -354,6 +256,9 @@ async def _process_buffer(sender_id: str, payload: dict):
                 session_mode = user_data.get('session_mode') or 'AI'
                 payment_status = user_data.get('payment_status') or 'pending'
                 appointment_date = user_data.get('appointment_date')
+                country = user_data.get('country')
+                timezone = user_data.get('timezone')
+                cached_slots = user_data.get('cached_slots')
             else:
                 new_user = supabase.table('orus_users').insert({'phone_number': real_sender_id}).execute()
                 user_uuid = new_user.data[0].get('id')
@@ -581,6 +486,316 @@ async def _process_buffer(sender_id: str, payload: dict):
                 else:
                     # Se trata como un desvío y continúa al LLM
                     cleaned_text += "\n[INSTRUCCIÓN INTERNA: El enlace de pago ya fue enviado (Fase 3). El usuario tiene una duda o objeción. Responde de forma clínica y autoritaria a su duda. Al final de tu respuesta, pregúntale explícitamente si tiene alguna otra pregunta o si desea proceder con el protocolo de atendimiento realizando el pago mediante el enlace seguro que le enviaste para poder agendar su sesión.]"
+        else:
+            if not appointment_date:
+                from api.services.location_service import (
+                    detect_country_and_timezone,
+                    get_user_localized_slots,
+                    format_localized_availability,
+                    find_matching_date,
+                    find_matching_slot
+                )
+                from api.services.calendar_client import get_free_slots_data, book_appointment
+                from datetime import datetime
+
+                # Asegurar que cached_slots sea un diccionario
+                import json
+                user_cached = cached_slots
+                if isinstance(user_cached, str):
+                    try:
+                        user_cached = json.loads(user_cached)
+                    except Exception:
+                        user_cached = {}
+                elif not user_cached:
+                    user_cached = {}
+
+                # 1. State: Timezone/Country onboarding
+                if not country or not timezone:
+                    detected_country, detected_tz = detect_country_and_timezone(text_body)
+                    if detected_country and detected_tz:
+                        country = detected_country
+                        timezone = detected_tz
+                        
+                        from api.services.location_service import get_next_5_active_days
+                        next_days = get_next_5_active_days()
+                        
+                        therapist_slots = {}
+                        for day_str in next_days:
+                            slots = get_free_slots_data(day_str)
+                            therapist_slots[day_str] = slots
+                            
+                        user_slots = get_user_localized_slots(therapist_slots, timezone)
+                        
+                        try:
+                            supabase.table('orus_users').update({
+                                'country': country,
+                                'timezone': timezone,
+                                'cached_slots': user_slots
+                            }).eq('id', user_uuid).execute()
+                        except Exception as e:
+                            print(f"Error guardando localización del usuario: {e}", flush=True)
+                            
+                        availability_msg = format_localized_availability(user_slots, timezone)
+                        reply_msg = (
+                            f"¡Entendido! He ajustado mis horarios a la zona horaria de {country} ({timezone}).\n\n"
+                            f"{availability_msg}"
+                        )
+                        
+                        try:
+                            supabase.table('orus_messages').insert({
+                                'user_id': user_uuid,
+                                'role': 'user',
+                                'content': text_body
+                            }).execute()
+                            supabase.table('orus_messages').insert({
+                                'user_id': user_uuid,
+                                'role': 'assistant',
+                                'content': reply_msg
+                            }).execute()
+                        except Exception as e:
+                            print(f"Error persistiendo respuesta de slots localizados: {e}", flush=True)
+                            
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+                    else:
+                        question_words = ['?', 'como', 'cuando', 'quien', 'donde', 'por que', 'qué', 'que', 'cuanto', 'costo', 'precio']
+                        is_question = any(qw in text_lower for qw in question_words)
+                        
+                        if is_question:
+                            cleaned_text += (
+                                "\n[SISTEMA - REGLA OBLIGATORIA]: El usuario acaba de pagar pero no ha indicado su país. "
+                                "Responde con brevedad a su pregunta y, al final de tu respuesta, recuérdale con un tono profesional "
+                                "que debe indicarte en qué país se encuentra para ajustar la agenda de citas a su huso horario local."
+                            )
+                        else:
+                            reply_msg = (
+                                "No he podido identificar tu país. Por favor, confírmame en qué país te encuentras actualmente "
+                                "(por ejemplo: España, Colombia, México) para poder mostrarte la agenda de citas en tu zona horaria local."
+                            )
+                            try:
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'user',
+                                    'content': text_body
+                                }).execute()
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'assistant',
+                                    'content': reply_msg
+                                }).execute()
+                            except Exception as e:
+                                print(f"Error persistiendo insistencia de país: {e}", flush=True)
+                                
+                            await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                            return
+
+                # 2. State: Booking Pending Name
+                elif session_mode == 'BOOKING_PENDING_NAME':
+                    name_provided = text_body.strip()
+                    if len(name_provided) < 2:
+                        reply_msg = "Por favor, indícanos tu nombre completo para el registro."
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+                    
+                    try:
+                        supabase.table('orus_users').update({
+                            'wa_name': name_provided,
+                            'session_mode': 'BOOKING_PENDING_EMAIL'
+                        }).eq('id', user_uuid).execute()
+                    except Exception as e:
+                        print(f"Error actualizando nombre temporal: {e}", flush=True)
+                        
+                    reply_msg = f"Gracias, {name_provided}. Ahora, por favor facilítame tu correo electrónico para enviarte los detalles y el acceso a la sesión."
+                    try:
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'user',
+                            'content': text_body
+                        }).execute()
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'assistant',
+                            'content': reply_msg
+                        }).execute()
+                    except Exception as e:
+                        print(f"Error persistiendo solicitud de email: {e}", flush=True)
+                        
+                    await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                    return
+
+                # 3. State: Booking Pending Email
+                elif session_mode == 'BOOKING_PENDING_EMAIL':
+                    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text_body)
+                    if not email_match:
+                        reply_msg = "Por favor, facilítame un correo electrónico válido (por ejemplo: usuario@gmail.com) para poder completar el registro de tu cita."
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+                    
+                    email_provided = email_match.group(0)
+                    
+                    pending_slot = None
+                    user_name = "Consultante"
+                    try:
+                        user_info = supabase.table('orus_users').select('pending_appointment, wa_name').eq('id', user_uuid).execute()
+                        if user_info.data:
+                            pending_slot = user_info.data[0].get('pending_appointment')
+                            user_name = user_info.data[0].get('wa_name') or "Consultante"
+                    except Exception as e:
+                        print(f"Error obteniendo cita pendiente: {e}", flush=True)
+                        
+                    if not pending_slot:
+                        reply_msg = "Ha ocurrido un inconveniente con el registro temporal de tu cita. Por favor, selecciona nuevamente el día que deseas agendar."
+                        try:
+                            supabase.table('orus_users').update({'session_mode': 'AI'}).eq('id', user_uuid).execute()
+                        except Exception:
+                            pass
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+                    
+                    print(f"[Booking] Registrando cita para {user_name} en slot {pending_slot} con email {email_provided}", flush=True)
+                    try:
+                        supabase.table('orus_messages').insert({
+                            'user_id': user_uuid,
+                            'role': 'user',
+                            'content': text_body
+                        }).execute()
+                    except Exception:
+                        pass
+
+                    booking_result = book_appointment(
+                        phone_number=real_sender_id,
+                        date_time=pending_slot,
+                        name=user_name,
+                        email=email_provided
+                    )
+                    
+                    if "ÉXITO" in booking_result or "[AGENDA_COMPLETA]" in booking_result:
+                        try:
+                            supabase.table('orus_users').update({
+                                'session_mode': 'AI',
+                                'pending_appointment': None,
+                                'appointment_date': pending_slot
+                            }).eq('id', user_uuid).execute()
+                        except Exception as e:
+                            print(f"Error limpiando estado de agendamiento: {e}", flush=True)
+                    else:
+                        reply_msg = f"Hubo un problema al registrar la cita en el calendario: {booking_result}. Por favor, vuelve a intentarlo o solicita asistencia."
+                        await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                        return
+                    
+                    return
+
+                # 4. Standard Booking Intentions (Timezone is already set)
+                else:
+                    matched_date = find_matching_date(text_body, user_cached)
+                    if matched_date:
+                        day_slots = user_cached[matched_date]
+                        matched_slot = find_matching_slot(text_body, day_slots)
+                        
+                        DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                        MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                        
+                        if matched_slot:
+                            pending_iso = matched_slot["sp_iso"]
+                            local_time_str = matched_slot["local_time_str"]
+                            
+                            try:
+                                supabase.table('orus_users').update({
+                                    'pending_appointment': pending_iso,
+                                    'session_mode': 'BOOKING_PENDING_NAME'
+                                }).eq('id', user_uuid).execute()
+                            except Exception as e:
+                                print(f"Error guardando cita pendiente: {e}", flush=True)
+                                
+                            try:
+                                parsed_date = datetime.strptime(matched_date, "%Y-%m-%d")
+                                day_name = DAYS_ES[parsed_date.weekday()]
+                                day_num = parsed_date.day
+                                month_name = MONTHS_ES[parsed_date.month - 1]
+                                day_label = f"{day_name} {day_num} de {month_name}"
+                            except Exception:
+                                day_label = matched_date
+                                
+                            reply_msg = (
+                                f"Perfecto. Reservaremos provisionalmente el {day_label} a las {local_time_str} (hora de {country}). "
+                                "Para completar la reserva en mi sistema, indícame por favor tu Nombre Completo."
+                            )
+                            try:
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'user',
+                                    'content': text_body
+                                }).execute()
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'assistant',
+                                    'content': reply_msg
+                                }).execute()
+                            except Exception as e:
+                                print(f"Error persistiendo confirmación de slot: {e}", flush=True)
+                                
+                            await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                            return
+                        else:
+                            has_hour_indicator = any(x in text_lower for x in ["am", "pm", "hs", "hora", "las", "a las"]) or len(re.findall(r'\b\d{1,2}\b', text_lower)) > 1
+                            
+                            am_slots = [s["local_time_str"] for s in day_slots if s["local_hour"] < 12]
+                            pm_slots = [s["local_time_str"] for s in day_slots if s["local_hour"] >= 12]
+                            
+                            try:
+                                parsed_date = datetime.strptime(matched_date, "%Y-%m-%d")
+                                day_name = DAYS_ES[parsed_date.weekday()]
+                                day_num = parsed_date.day
+                                month_name = MONTHS_ES[parsed_date.month - 1]
+                                day_label = f"{day_name} {day_num} de {month_name}"
+                            except Exception:
+                                day_label = matched_date
+                                
+                            hours_lines = []
+                            if am_slots:
+                                hours_lines.append(f"Mañana: {', '.join(am_slots)}")
+                            if pm_slots:
+                                hours_lines.append(f"Tarde/Noche: {', '.join(pm_slots)}")
+                            hours_str = "\n".join(hours_lines) if hours_lines else "sin disponibilidad"
+                            
+                            if has_hour_indicator:
+                                reply_msg = (
+                                    f"El horario solicitado no está disponible para el {day_label} en tu zona horaria. "
+                                    f"Para ese día tengo libres los siguientes horarios:\n\n{hours_str}\n\n"
+                                    f"Por favor, selecciona uno de ellos."
+                                )
+                            else:
+                                reply_msg = (
+                                    f"Para el {day_label}, estos son los horarios disponibles en tu hora local ({timezone}):\n\n"
+                                    f"{hours_str}\n\n"
+                                    f"¿Cuál de estos te conviene?"
+                                )
+                                
+                            try:
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'user',
+                                    'content': text_body
+                                }).execute()
+                                supabase.table('orus_messages').insert({
+                                    'user_id': user_uuid,
+                                    'role': 'assistant',
+                                    'content': reply_msg
+                                }).execute()
+                            except Exception as e:
+                                print(f"Error persistiendo respuesta de horas de día: {e}", flush=True)
+                                
+                            await wa_client.send_message(to=real_sender_id, text=reply_msg)
+                            return
+                    else:
+                        availability_str = format_localized_availability(user_cached, timezone)
+                        cleaned_text += (
+                            f"\n[SISTEMA - REGLA OBLIGATORIA]: El usuario ya pagó pero aún no ha agendado su cita. "
+                            f"Responde a su mensaje con brevedad, empatía y profesionalismo en el tono de El Escultor. "
+                            f"Al final de tu respuesta, DEBES invitarle a seleccionar uno de los días y horarios disponibles. "
+                            f"Muestra exactamente esta tabla de horarios en tu respuesta para facilitarle la elección:\n\n"
+                            f"{availability_str}"
+                        )
 
         # ── 6. LLM con Memoria ────────────────────────────────────────────────
         history_msgs = []
@@ -617,24 +832,7 @@ async def _process_buffer(sender_id: str, payload: dict):
             except Exception as e:
                 print(f"Error con historial/persistencia: {e}", flush=True)
 
-        # Interceptar selección parcial de día en agendamiento (Fase 4)
-        if payment_status == 'paid' and not appointment_date and user_uuid:
-            slots_reply = try_extract_slots_for_user_date(text_body, user_uuid)
-            if slots_reply:
-                print(f"[Slots Interceptor] Interceptando mensaje y enviando slots: {slots_reply}", flush=True)
-                full_reply = slots_reply + " [##EOS##]"
-                try:
-                    supabase.table('orus_messages').insert({
-                        'user_id': user_uuid,
-                        'role': 'assistant',
-                        'content': full_reply,
-                        'sentiment_flag': 'Interés',
-                        'requires_human': False
-                    }).execute()
-                except Exception as e:
-                    print(f"Error persistiendo intercepción de slots: {e}", flush=True)
-                await wa_client.send_message(to=real_sender_id, text=slots_reply)
-                return
+
 
         prompt_with_context = f"[Metadatos del Remitente: JID={real_sender_id}]\nUsuario: {cleaned_text}"
 

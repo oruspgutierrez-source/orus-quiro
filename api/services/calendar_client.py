@@ -9,7 +9,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 SERVICE_ACCOUNT_FILE = 'credentials.json'
 
 CALENDAR_ID = os.getenv("CALENDAR_ID", "primary")
-BUSINESS_HOURS = [8, 9, 10, 11, 14, 15, 16, 17]
+BUSINESS_HOURS = [8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20]
 
 def get_calendar_service():
     if not os.path.exists(SERVICE_ACCOUNT_FILE):
@@ -62,7 +62,8 @@ def get_free_slots_data(date_str: str) -> list[int]:
 
 HOUR_LABEL = {
     8: "8am", 9: "9am", 10: "10am", 11: "11am",
-    14: "2pm", 15: "3pm", 16: "4pm", 17: "5pm"
+    13: "1pm", 15: "3pm", 16: "4pm", 17: "5pm",
+    18: "6pm", 19: "7pm", 20: "8pm"
 }
 MONTHS_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
              "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]

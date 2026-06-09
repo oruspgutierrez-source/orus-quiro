@@ -14,15 +14,15 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 def get_next_5_business_days() -> list[str]:
-    """Calcula los siguientes 5 días hábiles (lunes a viernes) a partir de mañana.
+    """Calcula los siguientes 5 días hábiles (lunes a sábado) a partir de mañana.
     Retorna una lista de strings con formato 'YYYY-MM-DD'.
     """
     import datetime as dt
     days = []
     current = dt.date.today() + dt.timedelta(days=1)
     while len(days) < 5:
-        # 0 = lunes, ..., 4 = viernes, 5 = sábado, 6 = domingo
-        if current.weekday() < 5:
+        # 0 = lunes, ..., 5 = sábado, 6 = domingo
+        if current.weekday() < 6:
             days.append(current.strftime("%Y-%m-%d"))
         current += dt.timedelta(days=1)
     return days
@@ -110,82 +110,29 @@ async def process_successful_payment(session: dict):
             except Exception as db_log_err:
                 print(f"Error escribiendo log de facturación en Supabase: {db_log_err}", flush=True)
 
-        # 5. Activar proactivamente el Flujo de Agendamiento (Spec 13)
-        # Gemini recibe un trigger interno post-pago para iniciar el protocolo
-        # sin esperar a que el consultante escriba un nuevo mensaje.
+        # 5. Activar proactivamente el Flujo de Agendamiento (Spec 38)
+        # Se envía directamente el mensaje de bienvenida pospago solicitando el país.
         try:
-            from api.services.gemini_client import generate_response
-            from api.services.calendar_client import get_free_slots_data, BUSINESS_HOURS, format_availability_table
-            import re
-            import datetime as dt
-
-            # 5.1. Calcular disponibilidad de los siguientes 5 días hábiles en el servidor
-            next_days = get_next_5_business_days()
-            slots_per_day = {}
-
-            for day_str in next_days:
-                free_slots = get_free_slots_data(day_str)
-                slots_per_day[day_str] = sorted(free_slots)
+            inquiry_msg = "¡Muchas gracias por tu pago! Para mostrarte la agenda de citas en tu zona horaria local, confírmame por favor en qué país te encuentras actualmente."
             
-            availability_str = format_availability_table(next_days, slots_per_day)
-            print(f"[Payments Webhook] Disponibilidad estructurada precalculada:\n{availability_str}", flush=True)
-
-            # Recuperar historial reciente del consultante para mantener contexto
-            history_msgs = []
-            try:
-                user_res_hist = supabase.table('orus_users').select('id').eq('phone_number', jid).execute()
-                if user_res_hist.data:
-                    user_id_hist = user_res_hist.data[0]['id']
-                    hist = supabase.table('orus_messages').select('role, content').eq('user_id', user_id_hist).order('created_at', desc=True).limit(6).execute()
-                    if hist.data:
-                        for msg in reversed(hist.data):
-                            gemini_role = "model" if msg['role'] == 'assistant' else "user"
-                            history_msgs.append({"role": gemini_role, "text": msg['content']})
-            except Exception as hist_err:
-                print(f"[Payments Webhook] Error cargando historial para agendamiento: {hist_err}", flush=True)
-
-            # Prompt de trigger interno: informa a Gemini que el pago se completó
-            # y le inyecta directamente la disponibilidad precalculada del servidor.
-            trigger_prompt = (
-                f"[Metadatos del Remitente: JID={jid}]\n"
-                f"[SISTEMA — EVENTO INTERNO]: El pago de {client_name} por {amount_total:.2f} {currency} "
-                f"fue confirmado exitosamente por Stripe (ID: {transaction_id}). "
-                f"La factura PDF ya fue enviada y el cliente notificado.\n\n"
-                f"INFORME DE DISPONIBILIDAD OBTENIDO DIRECTAMENTE DEL SERVIDOR:\n"
-                f"{availability_str}\n\n"
-                f"INSTRUCCIONES CLÍNICAS OBLIGATORIAS:\n"
-                f"1. DEBES presentarle directamente estos horarios al consultante de forma estructurada para agendar su primera sesión (el Mapeo).\n"
-                f"2. NO debes saludar, felicitar, agradecer ni hacer mención alguna al pago o la factura. El cliente ya vio y recibió el PDF de la factura, y tu pie de factura ya hizo la transición.\n"
-                f"3. Tu mensaje debe comenzar directamente con la propuesta clínica en el tono sobrio de El Escultor, ofreciendo estos días y horas específicos de forma limpia y directa.\n"
-                f"4. NO invoques ninguna herramienta como check_free_slots() ni book_appointment() en esta respuesta, ya que la información de disponibilidad ha sido precalculada e inyectada por el servidor. Simplemente presenta las opciones al usuario y espera su elección.\n"
-                f"5. CRÍTICO: Presenta TODAS las fechas y horarios disponibles juntos en UN SOLO BLOQUE de texto. NO dividas los días usando barras (|||). Las barras (|||) solo deben usarse si el mensaje en su totalidad es extremadamente largo, pero la lista de horarios COMPLETA debe ir en el mismo fragmento."
-            )
-
-            print(f"[Payments Webhook] Activando flujo de agendamiento proactivo para {jid}...", flush=True)
-            sched_response = await generate_response(
-                prompt=trigger_prompt,
-                history=history_msgs
-            )
-
-            sched_reply = sched_response.get('reply', '')
-            if sched_reply:
-                reply_clean = sched_reply.replace("[##EOS##]", "").strip()
-                chunks = [c.strip() for c in re.split(r'\|{2,}', reply_clean) if len(c.strip()) > 1]
-                if not chunks:
-                    chunks = [reply_clean] if reply_clean else []
-
-                for i, chunk in enumerate(chunks):
-                    await wa_client.send_message(to=jid, text=chunk)
-                    print(f"[Payments Webhook] Fragmento agendamiento {i+1}/{len(chunks)} enviado a {jid}.", flush=True)
-                    if i < len(chunks) - 1:
-                        import asyncio
-                        await asyncio.sleep(max(2, len(chunk) // 20))
-
-            print("[Payments Webhook] Flujo de agendamiento proactivo completado.", flush=True)
+            # Buscar el ID del usuario en orus_users
+            user_res_hist = supabase.table('orus_users').select('id').eq('phone_number', jid).execute()
+            if user_res_hist.data:
+                user_id_hist = user_res_hist.data[0]['id']
+                # Registrar mensaje en orus_messages
+                supabase.table('orus_messages').insert({
+                    'user_id': user_id_hist,
+                    'role': 'assistant',
+                    'content': inquiry_msg
+                }).execute()
+                
+            print(f"[Payments Webhook] Enviando pregunta de país pospago a {jid}...", flush=True)
+            await wa_client.send_message(to=jid, text=inquiry_msg)
+            print("[Payments Webhook] Flujo de agendamiento pospago iniciado.", flush=True)
 
         except Exception as sched_err:
             safe_err = str(sched_err).encode('ascii', 'replace').decode('ascii')
-            print(f"[Payments Webhook] Error no bloqueante en el flujo de agendamiento: {safe_err}", flush=True)
+            print(f"[Payments Webhook] Error no bloqueante en el flujo de agendamiento pospago: {safe_err}", flush=True)
 
     except Exception as e:
         print(f"[Payments Webhook] Error crítico en process_successful_payment: {e}", flush=True)
