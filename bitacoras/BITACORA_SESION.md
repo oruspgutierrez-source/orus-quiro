@@ -432,3 +432,8 @@
   2. Si el JID formateado no encuentra filas coincidentes, aplicar un fallback que intente actualizar la fila usando solo los dígitos numéricos del número recibido.
 - **Certificación**: Se actualizó `scratch/test_gemini_resolution.py` para probar la función directamente utilizando un número sin JID y se validó en Supabase que el campo `appointment_date` ahora se actualiza exitosamente en la fila correcta.
 
+### 5. Sesión 2026-06-09 — Migración a OpenRouter y Resolución de Error en Validación de Usuario
+- **Migración E2E a OpenRouter**: Se removió la dependencia del SDK directo de Google Gemini (`google-genai`) en la ruta `/api/logs/analyze` de `api/routes/logs.py`, refactorizándola para usar peticiones HTTP asíncronas vía `httpx` hacia la API de OpenRouter. Esto unifica toda la lógica del LLM bajo OpenRouter y blinda al backend de caídas por límites de facturación o saldo en Google AI Studio.
+- **Detección de Regresión (Timezone Columns en Supabase)**: Se analizó que tras el despliegue del sistema de agendamiento multi-zona horaria, el bot comenzó a responder únicamente con el mensaje genérico de bienvenida. A través de la revisión de logs mediante SSH (`docker logs`), se identificó la excepción: `Error en validación de usuario: {'message': 'column orus_users.country does not exist', 'code': '42703'}`. Dado que el script SQL en `migrations/add_timezone_columns.sql` aún no ha sido aplicado al editor SQL de Supabase, la tabla `orus_users` carecía de los campos `country`, `timezone`, `cached_slots` y `pending_appointment`, dejando `user_uuid` como `None` y forzando al bot a reiniciar el flujo en la fase de bienvenida constantemente.
+
+

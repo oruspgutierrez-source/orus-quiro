@@ -27,3 +27,7 @@
 - **Error detectado 10 (Mensajes duplicados):** Los mensajes se procesaban por duplicado o triplicado cuando provenían de dispositivos móviles reales. Esto ocurría porque `Dockerfile` iniciaba `uvicorn` con `--workers 4`, dividiendo las peticiones entre 4 procesos independientes que no compartían la memoria local (`_seen_messages`, `_debounce_timers` y `_message_buffers`).
 - **Corrección:** Se redujo el número de workers en `Dockerfile` a `--workers 1` para unificar el espacio de memoria y garantizar la efectividad del debounce y deduplicación nativos del backend.
 
+## Fecha: 2026-06-09
+- **Error detectado 11 (Columnas de Timezone faltantes en Supabase):** Tras desplegar la actualización de agendamiento multi-zona horaria, el bot comenzó a responder únicamente con el mensaje genérico de bienvenida. Al revisar los logs de producción en la VPS (`docker logs`), se identificó la excepción: `Error en validación de usuario: {'message': 'column orus_users.country does not exist', 'code': '42703'}`. Debido a esto, `user_uuid` quedaba en `None` y la máquina de estados fallaba, cayendo permanentemente en la fase inicial de bienvenida de la IA sin poder transicionar o registrar mensajes.
+- **Corrección:** Se debe ejecutar la migración SQL descrita en `migrations/add_timezone_columns.sql` en el panel de control de Supabase (SQL Editor) para aprovisionar las columnas `country`, `timezone`, `cached_slots` y `pending_appointment` en la tabla `orus_users`.
+
