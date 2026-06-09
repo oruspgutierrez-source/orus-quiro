@@ -647,7 +647,13 @@ async def _process_buffer(sender_id: str, payload: dict):
 
                 # 2. State: Booking Pending Name
                 elif session_mode == 'BOOKING_PENDING_NAME':
-                    name_provided = text_body.strip()
+                    # Limpiar prefijo interno antes de usar como nombre
+                    raw_name = text_body.strip()
+                    if "[Mensaje de texto independiente]:" in raw_name:
+                        raw_name = raw_name.split("[Mensaje de texto independiente]:", 1)[1].strip()
+                    if "[NOTA: " in raw_name:
+                        raw_name = raw_name.split("[NOTA: ")[0].strip()
+                    name_provided = raw_name
                     if len(name_provided) < 2:
                         reply_msg = "Por favor, indícanos tu nombre completo para el registro."
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)
@@ -681,7 +687,13 @@ async def _process_buffer(sender_id: str, payload: dict):
 
                 # 3. State: Booking Pending Email
                 elif session_mode == 'BOOKING_PENDING_EMAIL':
-                    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text_body)
+                    # Limpiar prefijo interno antes de buscar el email
+                    raw_email_text = text_body
+                    if "[Mensaje de texto independiente]:" in raw_email_text:
+                        raw_email_text = raw_email_text.split("[Mensaje de texto independiente]:", 1)[1].strip()
+                    if "[NOTA: " in raw_email_text:
+                        raw_email_text = raw_email_text.split("[NOTA: ")[0].strip()
+                    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw_email_text)
                     if not email_match:
                         reply_msg = "Por favor, facilítame un correo electrónico válido (por ejemplo: usuario@gmail.com) para poder completar el registro de tu cita."
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)
