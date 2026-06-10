@@ -170,68 +170,44 @@ def check_free_slots(start_date: str, end_date: str) -> str:
 
 async def send_visual_agenda_protocol(phone_number: str, name: str, date_time: str, email: str, link: str):
     """
-    Subrutina asíncrona para despachar secuencialmente las imágenes y textos explicativos (Spec 13)
-    al WhatsApp del usuario tras agendar la cita.
+    Subrutina simplificada (Spec 41) para notificar el agendamiento exitoso y redirigir
+    directamente al consultante a la Web App de datos biométricos.
     """
     from api.services.wa_client import wa_client
     
-    print(f"[Visual Agenda] Iniciando envío de guías de agendamiento para {phone_number}...", flush=True)
+    print(f"[Visual Agenda] Iniciando envío simplificado para {phone_number}...", flush=True)
     
-    # Ruta base de las imágenes
-    img_path = os.path.join("resources", "media", "images", "explicacionagenda.png")
-    
-    # 1. Texto unificado
-    unified_text = (
-        "Tu sesion ha sido agendada con exito.\n\n"
-        "Para registrar la cita en tu dispositivo, sigue este protocolo exacto:\n\n"
-        "1. Al abrir el enlace que te compartiré, verás tres puntos en la esquina superior derecha. Presiona ahi.\n"
-        "2. Selecciona la opcion 'Copiar en...'.\n"
-        "3. Elige 'Mi calendario'. La cita se registrara automaticamente en tu dispositivo."
-    )
+    fecha_legible = date_time
     try:
-        await wa_client.send_message(to=phone_number, text=unified_text)
-        print("[Visual Agenda] Texto unificado enviado.", flush=True)
-    except Exception as e:
-        print(f"[Visual Agenda Error] Fallo al enviar texto unificado: {e}", flush=True)
+        import datetime
+        dt = datetime.datetime.fromisoformat(date_time)
+        dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+        meses = [
+            "enero", "febrero", "marzo", "abril", "mayo", "junio",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+        ]
+        dia_semana = dias[dt.weekday()]
+        dia_mes = dt.day
+        nombre_mes = meses[dt.month - 1]
+        hora = f"{dt.hour:02d}:{dt.minute:02d}"
+        fecha_legible = f"{dia_semana} {dia_mes} de {nombre_mes} a las {hora}"
+    except Exception as parse_err:
+        print(f"[Visual Agenda] Error formateando fecha {date_time}: {parse_err}", flush=True)
+        fecha_legible = date_time
         
-    await asyncio.sleep(2.0)
-    
-    # 2. Imagen unificada
-    try:
-        await wa_client.send_image_message(to=phone_number, file_path=img_path, caption="")
-        print("[Visual Agenda] Imagen unificada enviada.", flush=True)
-    except Exception as e:
-        print(f"[Visual Agenda Error] Fallo al enviar imagen unificada: {e}", flush=True)
-    
-    await asyncio.sleep(2.0)
-    
-    # 4. Mensaje final con el enlace directo para abrir el html de la cita agendada
-    link_message = (
-        f"Aquí tienes el enlace directo para abrir y guardar la cita en tu calendario:\n\n{link}"
-    )
-    try:
-        await wa_client.send_message(to=phone_number, text=link_message)
-        print("[Visual Agenda] Mensaje con enlace enviado exitosamente.", flush=True)
-    except Exception as e:
-        print(f"[Visual Agenda Error] Fallo al enviar mensaje con enlace: {e}", flush=True)
-
-    await asyncio.sleep(3.0)
-
-    # Extraer numero limpio
     clean_phone = phone_number.split("@")[0] if "@" in phone_number else phone_number
-
-    # 5. Mensaje final con el link a la Web App de datos biométricos
-    biometric_message = (
-        f"Finalmente, necesito tu material de trabajo. Ingresa a este enlace seguro https://ruta-del-escultor.vercel.app/?phone={clean_phone} "
-        "para subir las fotografias de tus manos siguiendo estrictamente los parametros indicados. "
-        "Este es tu hardware; asegurate de que la iluminacion sea perfecta para que Orus pueda decodificarlo "
-        "con precision antes de nuestra sesion de Revelacion."
+    
+    unified_message = (
+        f"¡Excelente, *{name}*! Tu cita para la Auditoría Biosemiótica ha quedado reservada con éxito para el **{fecha_legible}**.\n\n"
+        f"Para completar tu proceso de preparación, el siguiente paso es registrar tus datos y fotos biométricas en nuestro formulario seguro: https://ruta-del-escultor.vercel.app/?phone={clean_phone}\n\n"
+        "Asegúrate de que la iluminación de tus fotos sea perfecta para que pueda decodificarse con precisión antes de nuestra sesión. ¡Nos vemos pronto!"
     )
+    
     try:
-        await wa_client.send_message(to=phone_number, text=biometric_message)
-        print("[Visual Agenda] Mensaje de datos biométricos enviado exitosamente.", flush=True)
+        await wa_client.send_message(to=phone_number, text=unified_message)
+        print("[Visual Agenda] Mensaje simplificado enviado exitosamente.", flush=True)
     except Exception as e:
-        print(f"[Visual Agenda Error] Fallo al enviar mensaje de datos biométricos: {e}", flush=True)
+        print(f"[Visual Agenda Error] Fallo al enviar mensaje simplificado: {e}", flush=True)
 
 def book_appointment(phone_number: str, date_time: str, name: str, email: str) -> str:
     """Agenda una cita en el Google Calendar del profesional.
