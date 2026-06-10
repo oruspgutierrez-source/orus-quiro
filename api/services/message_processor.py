@@ -881,39 +881,6 @@ async def _process_buffer(sender_id: str, payload: dict):
                             }).eq('id', user_uuid).execute()
                         except Exception as e:
                             print(f"Error limpiando estado de agendamiento: {e}", flush=True)
-                        DAYS_ES_OK = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-                        MONTHS_ES_OK = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-                        try:
-                            from zoneinfo import ZoneInfo
-                            slot_dt = datetime.fromisoformat(pending_slot)
-                            tz = ZoneInfo(timezone or "America/Sao_Paulo")
-                            slot_local = slot_dt.astimezone(tz)
-                            day_name_ok = DAYS_ES_OK[slot_local.weekday()]
-                            month_name_ok = MONTHS_ES_OK[slot_local.month - 1]
-                            hour_ok = slot_local.hour
-                            ampm_ok = "am" if hour_ok < 12 else "pm"
-                            dh_ok = hour_ok if hour_ok <= 12 else hour_ok - 12
-                            if dh_ok == 0: dh_ok = 12
-                            time_ok = f"{dh_ok}:{slot_local.minute:02d} {ampm_ok}"
-                            date_ok = f"{day_name_ok} {slot_local.day} de {month_name_ok}"
-                        except Exception:
-                            date_ok = pending_slot
-                            time_ok = ""
-                        confirm_msg = (
-                            f"¡Tu cita ha sido registrada exitosamente! \U0001f4c5\n"
-                            f"*{date_ok} a las {time_ok}*\n"
-                            f"Recibirás todos los detalles en {email_provided}.\n\n"
-                            f"Si necesitas reagendar o tienes alguna duda, escríbeme aquí."
-                        )
-                        await wa_client.send_message(to=real_sender_id, text=confirm_msg)
-                        try:
-                            supabase.table('orus_messages').insert({
-                                'user_id': user_uuid,
-                                'role': 'assistant',
-                                'content': confirm_msg
-                            }).execute()
-                        except Exception:
-                            pass
                     else:
                         reply_msg = f"Hubo un problema al registrar la cita en el calendario: {booking_result}. Por favor, vuelve a intentarlo o solicita asistencia."
                         await wa_client.send_message(to=real_sender_id, text=reply_msg)

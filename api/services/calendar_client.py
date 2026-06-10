@@ -180,17 +180,24 @@ async def send_visual_agenda_protocol(phone_number: str, name: str, date_time: s
     fecha_legible = date_time
     try:
         import datetime
-        dt = datetime.datetime.fromisoformat(date_time)
-        dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+        dt = datetime.datetime.fromisoformat(date_time.replace('Z', '+00:00'))
+        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         meses = [
-            "enero", "febrero", "marzo", "abril", "mayo", "junio",
-            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
         ]
         dia_semana = dias[dt.weekday()]
         dia_mes = dt.day
         nombre_mes = meses[dt.month - 1]
-        hora = f"{dt.hour:02d}:{dt.minute:02d}"
-        fecha_legible = f"{dia_semana} {dia_mes} de {nombre_mes} a las {hora}"
+        
+        hour_12 = dt.hour
+        ampm = "am" if hour_12 < 12 else "pm"
+        hour_display = hour_12 if hour_12 <= 12 else hour_12 - 12
+        if hour_display == 0:
+            hour_display = 12
+            
+        time_str = f"{hour_display}:{dt.minute:02d} {ampm}"
+        fecha_legible = f"{dia_semana} {dia_mes} de {nombre_mes} a las {time_str}"
     except Exception as parse_err:
         print(f"[Visual Agenda] Error formateando fecha {date_time}: {parse_err}", flush=True)
         fecha_legible = date_time
@@ -198,14 +205,30 @@ async def send_visual_agenda_protocol(phone_number: str, name: str, date_time: s
     clean_phone = phone_number.split("@")[0] if "@" in phone_number else phone_number
     
     unified_message = (
-        f"¡Excelente, *{name}*! Tu cita para la Auditoría Biosemiótica ha quedado reservada con éxito para el **{fecha_legible}**.\n\n"
-        f"Para completar tu proceso de preparación, el siguiente paso es registrar tus datos y fotos biométricas en nuestro formulario seguro: https://ruta-del-escultor.vercel.app/?phone={clean_phone}\n\n"
-        "Asegúrate de que la iluminación de tus fotos sea perfecta para que pueda decodificarse con precisión antes de nuestra sesión. ¡Nos vemos pronto!"
+        f"¡Tu cita ha sido registrada exitosamente! 📅\n"
+        f"{fecha_legible}\n"
+        f"Recibirás todos los detalles en {email}.\n\n"
+        f"Para completar tu proceso de preparación, el siguiente paso es registrar tus datos y fotos biométricas en nuestro formulario seguro:\n"
+        f"https://ruta-del-escultor.vercel.app/?phone={clean_phone}\n\n"
+        f"Asegúrate de que la iluminación de tus fotos sea perfecta para que pueda decodificarse con precisión antes de nuestra sesión. ¡Nos vemos pronto!"
     )
     
     try:
         await wa_client.send_message(to=phone_number, text=unified_message)
         print("[Visual Agenda] Mensaje simplificado enviado exitosamente.", flush=True)
+        try:
+            from api.db.supabase_client import supabase
+            user_res = supabase.table('orus_users').select('id').eq('phone_number', phone_number).execute()
+            if user_res.data:
+                user_uuid = user_res.data[0]['id']
+                supabase.table('orus_messages').insert({
+                    'user_id': user_uuid,
+                    'role': 'assistant',
+                    'content': unified_message
+                }).execute()
+                print("[Visual Agenda DB] Mensaje registrado en Supabase.", flush=True)
+        except Exception as db_err:
+            print(f"[Visual Agenda DB Error] Fallo al registrar mensaje: {db_err}", flush=True)
     except Exception as e:
         print(f"[Visual Agenda Error] Fallo al enviar mensaje simplificado: {e}", flush=True)
 
