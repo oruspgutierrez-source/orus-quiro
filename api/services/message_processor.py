@@ -209,7 +209,7 @@ async def _process_buffer(sender_id: str, payload: dict):
                 
                 caption = item.get("content")
                 if "audio" in media_meta["type"]:
-                    text_parts.append(f"\n[Adjunto {media_counter}: NOTA DE VOZ. ATENCIÓN ORUS: DEBES procesar el audio adjunto {media_counter}. El texto a continuación NO es el audio]")
+                    text_parts.append(f"\n[Adjunto {media_counter}: NOTA DE VOZ. ATENCIÓN QUIRO: DEBES procesar el audio adjunto {media_counter}. El texto a continuación NO es el audio]")
                 elif caption:
                     text_parts.append(f"\n[Adjunto {media_counter}: {media_meta['type']} con texto/caption]: {caption}")
                 else:

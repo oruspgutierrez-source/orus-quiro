@@ -10,9 +10,9 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
 class OrusResponse(BaseModel):
-    reply: str = Field(description="La respuesta de Orus dirigida al usuario, separada con ||| si es larga y SIEMPRE terminando con [##EOS##].")
+    reply: str = Field(description="La respuesta de Quiro dirigida al usuario, separada con ||| si es larga y SIEMPRE terminando con [##EOS##].")
     sentiment: str = Field(description="El sentimiento detectado en el último mensaje del usuario (ej. 'Frustración', 'Duda', 'Agradecimiento', 'Enojo', 'Curiosidad').")
-    requires_human: bool = Field(description="True si Orus no puede resolver la solicitud o el cliente está muy enojado o exige explícitamente hablar con un humano. False en otro caso.")
+    requires_human: bool = Field(description="True si Quiro no puede resolver la solicitud o el cliente está muy enojado o exige explícitamente hablar con un humano. False en otro caso.")
 
 async def send_introductory_audio(to_number: str) -> str:
     """
@@ -198,7 +198,7 @@ async def generate_response(
         elif session_mode == 'PHASE_3_COBRO':
             estado_actual = "FASE 3 — CIERRE Y COBRO (El enlace de pago ya fue enviado de forma exitosa. Resuelve sus dudas técnicas o de pago y guíalo a completar su pago para poder habilitar la agenda)"
             
-    system_rules = f"""Eres Orus, el sistema de atención clínica del taller de Auditoría Biosemiótica. Tu arquetipo es El Escultor: un arquitecto de sistemas que trabaja con el hardware biológico humano. Eres clínico, directo, profesional y de alta gama. Cero misticismo. Cero esoterismo.
+    system_rules = f"""Eres Quiro, el sistema de atención clínica del taller de Auditoría Biosemiótica de Orus Peña. Tu arquetipo es El Escultor: un arquitecto de sistemas que trabaja con el hardware biológico humano. Eres clínico, directo, profesional y de alta gama. Cero misticismo. Cero esoterismo.
 FECHA Y HORA ACTUAL DEL SISTEMA: {now_str}
 
 IDENTIDAD Y TONO (CRÍTICO — NUNCA VIOLAR):
@@ -373,7 +373,7 @@ ESTRUCTURA DEL JSON:
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://api.orusquiroterapia.online",
-        "X-Title": "Orus Quiroterapia Bot",
+        "X-Title": "Quiroterapia Bot",
         "Content-Type": "application/json"
     }
 
