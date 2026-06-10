@@ -546,10 +546,16 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
   2. Se actualizó `renderMessageContent` para utilizar esta limpieza previa, asegurando que los mensajes se muestren perfectamente formateados.
   3. Se validó la compilación del frontend corriendo `npm run build` en el directorio de `dashboard-orus` sin registrar ningún fallo.
 
+### Cambios de Identidad (Nombre del Bot a "Quiro")
+- **Motivación:** El usuario solicitó cambiar el nombre del bot conversacional de "Orus" a "Quiro" para diferenciar el asistente virtual automatizado del especialista clínico humano (Orus Peña).
+- **Implementación:**
+  1. `api/services/gemini_client.py`: Se actualizó el Pydantic schema `OrusResponse` para referenciar a Quiro. Se modificó el `system_rules` (System Prompt) para instruir al modelo: *"Eres Quiro, el sistema de atención clínica del taller de Auditoría Biosemiótica de Orus Peña"*. Se cambió el encabezado `X-Title` de OpenRouter a `Quiroterapia Bot`.
+  2. `api/services/message_processor.py`: Se actualizó el tag de alerta técnica de las notas de voz en el buffer para decir `ATENCIÓN QUIRO` en lugar de `ATENCIÓN ORUS`.
+
 ### Despliegue en Producción y Verificación
 - Se pushearon los cambios al repositorio de GitHub.
 - Se ejecutó de manera remota el webhook de compilación y despliegue del backend de EasyPanel en la VPS.
-- Se auditó el estado de los contenedores Docker por SSH confirmando que el nuevo backend se levantó de forma exitosa y sin reportar excepciones en la inicialización de FastAPI/Uvicorn.
+- Se auditó el estado de los contenedores Docker por SSH confirmando que el nuevo backend (`whatsapp-api_orus-backend`) se redesplegó de forma exitosa y quedó activo (`Up` estable).
 
 
 
