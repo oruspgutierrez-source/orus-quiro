@@ -558,11 +558,12 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 - Se auditó el estado de los contenedores Docker por SSH confirmando que el nuevo backend (`whatsapp-api_orus-backend`) se redesplegó de forma exitosa y quedó activo (`Up` estable).
 
 ### Optimización de Agendamiento y Retorno Biométrico (Spec 41)
-- **Motivación:** Reducir la fricción del usuario en el registro de calendario y garantizar la confirmación de retorno de la Web App biométrica.
+- **Motivación:** Reducir la fricción del usuario en el registro de calendario y garantizar la confirmación de retorno de la Web App biométrica, eliminando duplicidad de mensajes de confirmación de agenda.
 - **Implementación:**
-  1. **Simplificación del Calendario:** En `api/services/calendar_client.py`, se removió por completo el despacho secuencial de las 3 imágenes guías de Google Calendar y el enlace de la cita. Ahora el sistema envía un único mensaje directo confirmando la fecha y hora de la cita y redirigiendo de inmediato al usuario al enlace de la Web App biométrica.
-  2. **Webhook de Retorno en Supabase:** El usuario actualizó la función `handle_evaluacion_completa` en Supabase para apuntar a la URL de producción del backend en la VPS (`https://api.orusquiroterapia.online/api/biometrics/completed`), reemplazando el túnel ngrok antiguo.
-  3. **Despliegue y Verificación:** Se subieron los cambios a GitHub, se disparó el deploy en EasyPanel y se comprobó que el contenedor se redesplegó de forma exitosa.
+  1. **Simplificación del Calendario:** En `api/services/calendar_client.py`, se removieron las imágenes guías y se unificó la confirmación de agenda en un único mensaje asíncrono con formato elegante (sin negritas/asteriscos en la fecha, emoji 📅 de calendario, detalles del email del usuario y el enlace seguro a la Web App biométrica). Este mensaje también se registra en la base de datos `orus_messages`.
+  2. **Eliminación de Mensajes Duplicados:** En `api/services/message_processor.py`, se removió por completo la lógica que enviaba síncronamente el segundo mensaje de confirmación redundante.
+  3. **Webhook de Retorno en Supabase:** El usuario actualizó la función `handle_evaluacion_completa` en Supabase para apuntar a la URL de producción del backend en la VPS (`https://api.orusquiroterapia.online/api/biometrics/completed`), reemplazando el túnel ngrok antiguo.
+  4. **Despliegue y Verificación:** Se subieron los cambios a GitHub, se disparó el deploy en EasyPanel y se comprobó que el contenedor se redesplegó de forma exitosa.
 
 
 
