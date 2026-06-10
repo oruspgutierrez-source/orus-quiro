@@ -182,21 +182,36 @@ export default function InboxChatView() {
     }
   };
 
+  const cleanMessageContent = (content) => {
+    if (!content) return '';
+    let cleaned = content;
+    // 1. Quitar el tag de fin de mensaje [##EOS##]
+    cleaned = cleaned.replace(/\[##EOS##\]/g, '');
+    // 2. Reemplazar saltos de línea y comillas escapadas literales
+    cleaned = cleaned.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    // 3. Quitar etiquetas del buffer del usuario en el frontend, ej: [Mensaje de texto independiente]:
+    cleaned = cleaned.replace(/^\[[^\]]+\]:\s*/, '');
+    return cleaned.trim();
+  };
+
   const renderMessageContent = (content) => {
     if (!content) return null;
+    
+    // Preprocesar y limpiar el contenido
+    const cleanedContent = cleanMessageContent(content);
     
     const combinedRegex = /(!?)\[(.*?)\]\((.*?)\)/g;
     let parts = [];
     let lastIndex = 0;
     let match;
     
-    while ((match = combinedRegex.exec(content)) !== null) {
+    while ((match = combinedRegex.exec(cleanedContent)) !== null) {
       const isImage = match[1] === '!';
       const text = match[2];
       const url = match[3];
       
       if (match.index > lastIndex) {
-        parts.push(<span key={lastIndex}>{content.substring(lastIndex, match.index)}</span>);
+        parts.push(<span key={lastIndex}>{cleanedContent.substring(lastIndex, match.index)}</span>);
       }
       
       if (isImage) {
@@ -225,11 +240,11 @@ export default function InboxChatView() {
       lastIndex = combinedRegex.lastIndex;
     }
     
-    if (lastIndex < content.length) {
-      parts.push(<span key={lastIndex}>{content.substring(lastIndex)}</span>);
+    if (lastIndex < cleanedContent.length) {
+      parts.push(<span key={lastIndex}>{cleanedContent.substring(lastIndex)}</span>);
     }
     
-    return <div className="whitespace-pre-wrap">{parts.length > 0 ? parts : content}</div>;
+    return <div className="whitespace-pre-wrap">{parts.length > 0 ? parts : cleanedContent}</div>;
   };
 
   return (

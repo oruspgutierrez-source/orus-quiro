@@ -42,3 +42,12 @@
   2. Se actualizó el parseador robusto en `gemini_client.py` para reemplazar explícitamente secuencias literales como `\\n` por saltos de línea reales (`\n`) y `\\"` por comillas dobles (`"`) en caso de caída en el parseador manual.
   3. Se añadió un blindaje preventivo en `message_processor.py` que limpia y reemplaza cualquier secuencia de escape literal (`\\n` o `\\"`) en el texto depurado (`reply_clean`) antes de fragmentarlo y enviarlo por WhatsApp.
   4. Se subieron los cambios a GitHub y se verificó el depliegue exitoso en la VPS por SSH, comprobando que el nuevo contenedor backend se levantó correctamente.
+
+- **Error detectado 13 (Visualización cruda de tags internos y escapes en el Dashboard):** Los mensajes en el chat de administración del Dashboard de React (`InboxChatView.jsx`) mostraban la data en bruto guardada en la base de datos de Supabase. Esto exponía tags internos del sistema como `[##EOS##]`, prefijos del buffer del usuario (ej: `[Mensaje de texto independiente]:`, `[Audio transcript]:`) y secuencias de escape literales como `\n` en lugar de saltos de línea renderizados.
+- **Corrección:**
+  1. Se implementó la función helper `cleanMessageContent(content)` en `InboxChatView.jsx` encargada de:
+     - Remover globalmente la marca de fin de conversación `[##EOS##]`.
+     - Traducir secuencias de escape literales `\\n` a saltos de línea nativos de JavaScript (`\n`) y `\\"` a comillas dobles (`"`).
+     - Eliminar cualquier etiqueta de prefijo con corchetes al principio del mensaje (ej: `[Mensaje de texto independiente]:`) usando el regex `/^\[[^\]]+\]:\s*/`.
+  2. Se actualizó la función `renderMessageContent(content)` para aplicar el helper de limpieza a `content` previo a la separación y renderizado de links, imágenes, audios y saltos de línea en el contenedor con estilo `whitespace-pre-wrap`.
+  3. Se corrió localmente `npm run build` en el directorio de `dashboard-orus` logrando compilar con éxito y verificar la integridad sintáctica del frontend.

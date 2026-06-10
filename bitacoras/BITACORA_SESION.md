@@ -538,8 +538,16 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
   2. **Traducción en Parseador Robustecido:** En caso de que se use el parseador robusto por fallos sintácticos del JSON, se decodifican explícitamente las secuencias de escape `\\n` a `\n` (salto de línea real) y `\\"` a `"` (comilla).
   3. **Blindaje en Message Processor:** Se añadió un paso en `message_processor.py` para limpiar y traducir cualquier carácter literal escapado `\\n` a salto de línea real en `reply_clean` inmediatamente antes de segmentar y transmitir los mensajes.
 
+#### Bug 2 — Visualización cruda de tags internos y escapes en el Dashboard
+- **Síntoma:** El chat del Dashboard de administración (`InboxChatView.jsx`) mostraba tags internos como `[##EOS##]`, saltos de línea crudos `\n` y prefijos técnicos como `[Mensaje de texto independiente]:`.
+- **Causa Raíz:** El frontend leía la data tal cual se guardaba en Supabase, sin aplicar ningún procesamiento o formateador estético.
+- **Solución:**
+  1. Se implementó una función helper `cleanMessageContent` en `InboxChatView.jsx` que limpia globalmente el tag `[##EOS##]`, decodifica escapes literales a caracteres reales y elimina prefijos de corchetes con el regex `/^\[[^\]]+\]:\s*/`.
+  2. Se actualizó `renderMessageContent` para utilizar esta limpieza previa, asegurando que los mensajes se muestren perfectamente formateados.
+  3. Se validó la compilación del frontend corriendo `npm run build` en el directorio de `dashboard-orus` sin registrar ningún fallo.
+
 ### Despliegue en Producción y Verificación
-- Se pushearon los cambios al repositorio de GitHub (`fix: robust parser and clean escaped newlines in message processor`).
+- Se pushearon los cambios al repositorio de GitHub.
 - Se ejecutó de manera remota el webhook de compilación y despliegue del backend de EasyPanel en la VPS.
 - Se auditó el estado de los contenedores Docker por SSH confirmando que el nuevo backend se levantó de forma exitosa y sin reportar excepciones en la inicialización de FastAPI/Uvicorn.
 
