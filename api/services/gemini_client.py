@@ -474,12 +474,15 @@ ESTRUCTURA DEL JSON:
                         "requires_human": False
                     }
                 
-                # Limpiar Markdown
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                    parsed_json = None
+                # Limpiar Markdown de forma extremadamente robusta extrayendo el contenido entre el primer '{' y el último '}'
+                json_candidate = raw_text.strip()
+                start_idx = json_candidate.find('{')
+                end_idx = json_candidate.rfind('}')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_candidate = json_candidate[start_idx:end_idx+1]
+                
                 try:
-                    parsed_json = json.loads(raw_text.strip())
+                    parsed_json = json.loads(json_candidate)
                 except Exception as json_err:
                     print(f"[OpenRouter] JSON estándar falló ({json_err}). Intentando parseador robusto...", flush=True)
                     # Intentar extraer campos manualmente
@@ -551,6 +554,8 @@ ESTRUCTURA DEL JSON:
                                     requires_human_content = False
 
                     if reply_content is not None:
+                        # Decodificar secuencias de escape de JSON comunes si el parseador robusto fue utilizado
+                        reply_content = reply_content.replace("\\n", "\n").replace('\\"', '"').strip()
                         parsed_json = {
                             "reply": reply_content,
                             "sentiment": sentiment_content,
@@ -565,6 +570,8 @@ ESTRUCTURA DEL JSON:
                                     cleaned_reply = cleaned_reply[:pos].strip()
                             if cleaned_reply.endswith('"') or cleaned_reply.endswith("'"):
                                 cleaned_reply = cleaned_reply[:-1]
+                            # Decodificar secuencias de escape de JSON comunes
+                            cleaned_reply = cleaned_reply.replace("\\n", "\n").replace('\\"', '"').strip()
                             parsed_json = {
                                 "reply": cleaned_reply,
                                 "sentiment": sentiment_content,

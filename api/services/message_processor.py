@@ -1107,8 +1107,9 @@ async def _process_buffer(sender_id: str, payload: dict):
             except Exception as e:
                 print(f"Error guardando respuesta: {e}", flush=True)
 
-        # ── 8. Fragmentar y enviar ─────────────────────────────────────────────
         reply_clean = reply.replace("[##EOS##]", "").strip()
+        # Decodificar secuencias de escape literales como \\n o \\" que puedan quedar
+        reply_clean = reply_clean.replace("\\n", "\n").replace('\\"', '"').strip()
 
         if "[AGENDA_COMPLETA]" in reply_clean or "[AUDIO_ENVIADO]" in reply_clean or "[COBRO_ENVIADO]" in reply_clean or "[SILENT_FALLBACK]" in reply_clean:
             print("[Processor] Intercepción silenciosa de Gemini. Delegando envío visual al sistema.", flush=True)
