@@ -32,3 +32,13 @@
 - **Corrección:** Se debe ejecutar la migración SQL descrita en `migrations/add_timezone_columns.sql` en el panel de control de Supabase (SQL Editor) para aprovisionar las columnas `country`, `timezone`, `cached_slots` y `pending_appointment` en la tabla `orus_users`.
   - *Explicación del comportamiento:* El sistema no intenta poblar el país ni la zona horaria al inicio (inician en `NULL` en la base de datos). Sin embargo, la consulta `SELECT` inicial en `message_processor.py` solicita estos campos para verificar el estado de usuarios recurrentes. Si las columnas físicas no existen en la base de datos, PostgreSQL rechaza toda la consulta `SELECT` con error 42703, haciendo fallar el procesamiento del mensaje completo. Al crear la columna con valor por defecto `NULL`, la consulta se ejecuta con éxito desde el inicio y el país solo se registrará cuando el usuario responda la pregunta post-pago.
 
+## Fecha: 2026-06-10
+- **Error detectado 12 (Mensaje de WhatsApp finaliza con salto de línea literal \\n):** En los mensajes enviados al usuario al finalizar el flujo de agendamiento, se observaba que al final del mensaje se concatenaba literalmente el string `\n` (barra invertida y 'n') en el dispositivo móvil. Esto ocurría porque:
+  1. La respuesta del LLM (OpenRouter) contenía comillas triples/backticks markdown (```json ... ```) envolviendo el objeto JSON.
+  2. Debido a esto, `json.loads` tradicional de Python fallaba y el backend utilizaba el *parseador robusto* basado en búsqueda de substrings en crudo (`raw_text`).
+  3. El parseador robusto extraía el campo `reply` con los caracteres de escape literales `\n` y `\"` sin deserializarlos (quedando como caracteres reales de barra invertida en el string Python). Al limpiar el token `[##EOS##]`, este escape se enviaba de manera literal a WhatsApp.
+- **Corrección:**
+  1. Se optimizó la limpieza de Markdown en `gemini_client.py` extrayendo el contenido desde el primer `{` hasta el último `}` de forma robusta antes de intentar `json.loads`. Esto garantiza que `json.loads` sea exitoso en casi el 100% de los casos y decodifique los caracteres de escape correctamente.
+  2. Se actualizó el parseador robusto en `gemini_client.py` para reemplazar explícitamente secuencias literales como `\\n` por saltos de línea reales (`\n`) y `\\"` por comillas dobles (`"`) en caso de caída en el parseador manual.
+  3. Se añadió un blindaje preventivo en `message_processor.py` que limpia y reemplaza cualquier secuencia de escape literal (`\\n` o `\\"`) en el texto depurado (`reply_clean`) antes de fragmentarlo y enviarlo por WhatsApp.
+  4. Se subieron los cambios a GitHub y se verificó el depliegue exitoso en la VPS por SSH, comprobando que el nuevo contenedor backend se levantó correctamente.

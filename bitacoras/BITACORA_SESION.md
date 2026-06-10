@@ -520,4 +520,28 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 - **Implementación del Switch Determinista Activo en Estados Intermedios**: Se detectó que si el bot estaba en `BOOKING_PENDING_NAME` o `BOOKING_PENDING_EMAIL` esperando estos datos, y el usuario enviaba una corrección (ej: *"no era esa la hora, cámbiamelo"*) o una pregunta (ej: *"¿cuánto dura?"*), el sistema se quedaba atascado en un bucle determinista solicitando el nombre o email de forma infinita. Se implementó una pre-verificación en `api/services/message_processor.py` que detecta si el input es una corrección, cambio de cita o pregunta, y de ser así, restablece dinámicamente el estado a `'AI'`, permitiendo al bot y a la IA responder de forma fluida y recalcular la cita sin atascos.
 - **Certificación de Suite de Pruebas**: Se actualizaron las pruebas unitarias en `scratch/test_timezone_scheduling.py` para verificar que `find_matching_slot` ignore el día del mes cuando hay conflictos de números en la frase, pasando todas las pruebas con éxito.
 
+---
+
+## 🎯 Sesión 2026-06-10 — Corrección de Salto de Línea Literal (\n) en Despedida de WhatsApp
+
+### Bugs Detectados y Resueltos
+
+#### Bug 1 — Visualización de `\n` al final del mensaje en el flujo de WhatsApp
+- **Síntoma:** Los mensajes enviados al usuario finalizaban con el texto literal `\n` (barra invertida y la letra 'n') en lugar de un salto de línea real.
+- **Causa Raíz:**
+  1. OpenRouter devolvía la respuesta JSON envuelta en marcas de bloque de código Markdown (```json ... ```).
+  2. Debido a los backticks finales, el método tradicional `json.loads` fallaba.
+  3. Esto forzaba al bot a utilizar el *parseador robusto* basado en substrings crudos, el cual extraía el campo `reply` con los caracteres de escape `\n` y `\"` literales sin decodificarlos a objetos nativos de Python.
+  4. Al remover el token `[##EOS##]`, el escape literal era enviado tal cual a la Evolution API de WhatsApp.
+- **Solución y Blindaje:**
+  1. **Limpieza Robusta de JSON:** Se mejoró `gemini_client.py` para extraer únicamente el texto situado entre la primera llave `{` y la última llave `}`. Esto elimina de forma garantizada cualquier residuo de Markdown o backticks alrededor, logrando que `json.loads` sea exitoso y decodifique las secuencias de escape nativamente.
+  2. **Traducción en Parseador Robustecido:** En caso de que se use el parseador robusto por fallos sintácticos del JSON, se decodifican explícitamente las secuencias de escape `\\n` a `\n` (salto de línea real) y `\\"` a `"` (comilla).
+  3. **Blindaje en Message Processor:** Se añadió un paso en `message_processor.py` para limpiar y traducir cualquier carácter literal escapado `\\n` a salto de línea real en `reply_clean` inmediatamente antes de segmentar y transmitir los mensajes.
+
+### Despliegue en Producción y Verificación
+- Se pushearon los cambios al repositorio de GitHub (`fix: robust parser and clean escaped newlines in message processor`).
+- Se ejecutó de manera remota el webhook de compilación y despliegue del backend de EasyPanel en la VPS.
+- Se auditó el estado de los contenedores Docker por SSH confirmando que el nuevo backend se levantó de forma exitosa y sin reportar excepciones en la inicialización de FastAPI/Uvicorn.
+
+
 
