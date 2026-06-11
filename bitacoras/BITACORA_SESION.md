@@ -582,18 +582,18 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 
 ---
 
-## 🛠️ Trabajo Realizado (Sesión 2026-06-11 — Reemplazo de Audio de Explicación de Proceso)
+## 🛠️ Trabajo Realizado (Sesión 2026-06-11 — Reemplazo de Audio y Ajuste de Mensaje Webhook)
 
-### Actualización del Audio de la Fase 2
-- **Motivación**: El usuario solicitó cambiar el audio introductorio explicativo del sistema por el archivo local `audio final`.
+### Actualización del Audio de la Fase 2 y Ajuste de Mensaje
+- **Motivación**:
+  1. El usuario solicitó cambiar el audio introductorio explicativo del sistema por el archivo local `audio final`.
+  2. Ajustar el mensaje final de confirmación de carga de fotos biométricas para corregir la referencia de la sesión ("charla de Revelación" a "charla de mapeo").
 - **Implementación**:
-  - Se identificó que el archivo `audio final` estaba en formato MP3.
-  - Se implementó un script utilitario automatizado (`scratch/convert_audio.py`) que descarga de forma segura `ffmpeg` estático en el perfil del usuario.
-  - Se convirtió el audio original de MP3 a formato OGG Opus (mono, 32k bitrate) optimizado para reproducción nativa en WhatsApp.
-  - Se reemplazó directamente el archivo `resources/media/audios/explicacion_proceso.ogg` con el nuevo audio transcodificado.
+  - **Conversión de Audio**: Se identificó que el archivo `audio final` era un MP3. Se implementó un script utilitario (`scratch/convert_audio.py`) que descarga `ffmpeg` estático y convirtió el archivo a formato OGG Opus (mono, 32k bitrate) apto para WhatsApp, guardándolo directamente en `resources/media/audios/explicacion_proceso.ogg`.
+  - **Ajuste de Mensaje**: En `api/routes/webhooks.py`, dentro del endpoint `biometrics_completed`, se modificó la variable `msg_text` reemplazando "nuestra charla de Revelación" por "nuestra charla de mapeo".
 - **Despliegue y Verificación**:
-  - Se prepararon los cambios en Git para comitear el nuevo archivo `.ogg` y los logs.
-  - Se coordinó el despliegue automático en la VPS a través del webhook de EasyPanel.
+  - Se prepararon los cambios en Git y se realizó commit y push a la rama `main`.
+  - Se desencadenó el redespliegue automático de la VPS haciendo curl al webhook de EasyPanel.
 
 ---
 
@@ -605,6 +605,7 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 | 42 | Webhook Biométrico (Update Trigger) | ✅ Completo | Trigger modificado para activarse en UPDATE. |
 | 43 | Corrección de RLS para Retorno Biométrico | ✅ Completo | RLS y trigger pg_net corregidos con firma jsonb y verificados exitosamente. |
 | 44 | Actualización de Audio de Proceso | ✅ Completo | Audio convertido y reemplazado en el backend de forma transparente. |
+| 45 | Ajuste de Mensaje Final Biométrico | ✅ Completo | Corrección de texto en el webhook para referenciar la charla de mapeo. |
 
 
 

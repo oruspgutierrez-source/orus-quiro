@@ -342,7 +342,7 @@ async def biometrics_completed(request: Request):
     if "@" not in to_jid:
         to_jid = f"{to_jid}@s.whatsapp.net"
 
-    msg_text = f"¡Excelente, *{nombre}*! Hemos recibido tus fotografías biométricas con total éxito. Con esto completamos oficialmente todo tu proceso de preparación.\n\nTu hardware biológico ha sido registrado y el ciclo de configuración de tu Auditoría Biosemiótica está cerrado. Te deseo el mayor de los éxitos en tu camino de Re-Ingeniería de aquí hasta el día de nuestra charla de Revelación. ¡Nos vemos pronto!"
+    msg_text = f"¡Excelente, *{nombre}*! Hemos recibido tus fotografías biométricas con total éxito. Con esto completamos oficialmente todo tu proceso de preparación.\n\nTu hardware biológico ha sido registrado y el ciclo de configuración de tu Auditoría Biosemiótica está cerrado. Te deseo el mayor de los éxitos en tu camino de Re-Ingeniería de aquí hasta el día de nuestra charla de mapeo. ¡Nos vemos pronto!"
 
     try:
         # Buscar usuario para registrar en orus_messages

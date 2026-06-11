@@ -64,5 +64,7 @@
   ```
 
 ## Fecha: 2026-06-11
-- **Acción:** Reemplazo del audio explicativo del proceso (`explicacion_proceso.ogg`) por el nuevo archivo `audio final` provisto por el usuario.
+- **Acción 1:** Reemplazo del audio explicativo del proceso (`explicacion_proceso.ogg`) por el nuevo archivo `audio final` provisto por el usuario.
 - **Detalle técnico:** Se transcodificó el archivo MP3 a formato OGG Opus optimizado para WhatsApp (mono, canal único, bitrate de 32k) usando una utilidad local que descarga ffmpeg de manera estática y segura. Se reemplazó el archivo directamente en `resources/media/audios/explicacion_proceso.ogg` para que el backend lo sirva de forma automática en la fase correspondiente.
+- **Acción 2:** Corrección del texto del mensaje final enviado al usuario tras completar la carga biométrica en `api/routes/webhooks.py`.
+- **Detalle técnico:** Se cambió la frase "nuestra charla de Revelación" por "nuestra charla de mapeo" en la variable `msg_text` dentro de la ruta `biometrics_completed` (`/api/biometrics/completed`).
