@@ -565,6 +565,48 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
   3. **Webhook de Retorno en Supabase:** El usuario actualizó la función `handle_evaluacion_completa` en Supabase para apuntar a la URL de producción del backend en la VPS (`https://api.orusquiroterapia.online/api/biometrics/completed`), reemplazando el túnel ngrok antiguo.
   4. **Despliegue y Verificación:** Se subieron los cambios a GitHub, se disparó el deploy en EasyPanel y se comprobó que el contenedor se redesplegó de forma exitosa.
 
+---
+
+## 🛠️ Trabajo Realizado (Sesión 2026-06-10 — Corrección de RLS y Webhook Biométrico)
+
+### Diagnóstico de Bloqueo de Retorno Biométrico (Spec 43)
+- **Bug Detectado**: Al finalizar la subida de imágenes en la Web App biométrica (alojada en Vercel), la actualización en la tabla `public.evaluaciones_completas` para establecer `fotos_completadas = true` devolvía un array vacío `[]` con código HTTP 200, indicando que ninguna fila fue modificada. Esto evitaba que el trigger `tr_evaluaciones_completas_update` de la base de datos se activara y enviara el webhook a la VPS para despachar el mensaje de éxito a WhatsApp.
+- **Causa Raíz**: 
+  1. **Políticas de RLS**: Row-Level Security (RLS) estaba habilitado en la tabla `evaluaciones_completas` pero carecía de una política de `UPDATE` que autorizara la operación para el rol público anónimo (`anon`), que es el que utiliza el frontend de la Web App en Vercel.
+  2. **Conflicto de pg_net y Esquema**: La extensión `pg_net` estaba mal ubicada o inactiva a nivel de esquema en la base de datos de producción de Supabase, lo que impedía resolver la llamada a `net.http_post`. Además, el casteo del body como `payload::text` entraba en conflicto con la firma nativa `jsonb` que espera la extensión de Supabase.
+- **Resolución**: 
+  - Se configuró la política de `UPDATE` para el rol `anon`.
+  - Se reinstaló la extensión `pg_net` de forma limpia bajo el esquema nativo `net` manejado por Supabase.
+  - Se actualizó la función del trigger `handle_evaluacion_completa` para pasar el `body` como `jsonb` (`body := payload`) en lugar de `text`, coincidiendo perfectamente con la firma esperada y logrando despachar el webhook sin errores.
+- **Prueba de Concepto y Validación**: Se ejecutó una actualización de prueba a través de la API anónima de Supabase, la cual retornó con éxito (HTTP 200) devolviendo el registro actualizado y demostrando que RLS, la extensión `pg_net`, el trigger y la función del webhook están 100% operativos.
+
+---
+
+## 🛠️ Trabajo Realizado (Sesión 2026-06-11 — Reemplazo de Audio de Explicación de Proceso)
+
+### Actualización del Audio de la Fase 2
+- **Motivación**: El usuario solicitó cambiar el audio introductorio explicativo del sistema por el archivo local `audio final`.
+- **Implementación**:
+  - Se identificó que el archivo `audio final` estaba en formato MP3.
+  - Se implementó un script utilitario automatizado (`scratch/convert_audio.py`) que descarga de forma segura `ffmpeg` estático en el perfil del usuario.
+  - Se convirtió el audio original de MP3 a formato OGG Opus (mono, 32k bitrate) optimizado para reproducción nativa en WhatsApp.
+  - Se reemplazó directamente el archivo `resources/media/audios/explicacion_proceso.ogg` con el nuevo audio transcodificado.
+- **Despliegue y Verificación**:
+  - Se prepararon los cambios en Git para comitear el nuevo archivo `.ogg` y los logs.
+  - Se coordinó el despliegue automático en la VPS a través del webhook de EasyPanel.
+
+---
+
+## 🚦 Estado de los Specs
+
+| # | Spec | Estado | Notas |
+|---|------|--------|-------|
+| 41 | Optimización de Agendamiento y Mensajería | ✅ Completo | Mensaje único refinado sin duplicados. Webhook de retorno configurado. |
+| 42 | Webhook Biométrico (Update Trigger) | ✅ Completo | Trigger modificado para activarse en UPDATE. |
+| 43 | Corrección de RLS para Retorno Biométrico | ✅ Completo | RLS y trigger pg_net corregidos con firma jsonb y verificados exitosamente. |
+| 44 | Actualización de Audio de Proceso | ✅ Completo | Audio convertido y reemplazado en el backend de forma transparente. |
+
+
 
 
 

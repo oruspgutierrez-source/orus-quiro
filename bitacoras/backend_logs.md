@@ -51,3 +51,18 @@
      - Eliminar cualquier etiqueta de prefijo con corchetes al principio del mensaje (ej: `[Mensaje de texto independiente]:`) usando el regex `/^\[[^\]]+\]:\s*/`.
   2. Se actualizó la función `renderMessageContent(content)` para aplicar el helper de limpieza a `content` previo a la separación y renderizado de links, imágenes, audios y saltos de línea en el contenedor con estilo `whitespace-pre-wrap`.
   3. Se corrió localmente `npm run build` en el directorio de `dashboard-orus` logrando compilar con éxito y verificar la integridad sintáctica del frontend.
+
+- **Error detectado 14 (Bloqueo de RLS en Supabase para el registro biométrico):** Al finalizar la subida de imágenes en la Web App biométrica (Vercel), la llamada para actualizar `fotos_completadas` a `true` mediante `.update({ fotos_completadas: true }).eq('id', globalRecordId)` devolvía un array vacío `[]` con status HTTP 200 sin aplicar cambios. Esto ocurría porque Row-Level Security (RLS) estaba activo en la tabla `evaluaciones_completas` sin ninguna política que autorizara la operación de `UPDATE` al rol público `anon`, haciendo que Postgrest filtrara silenciosamente la fila e impidiera disparar el trigger del webhook.
+- **Corrección:** Se preparó la migración SQL en `spec_43_fix_rls_biometrics.md` para crear la política RLS que permite operaciones `UPDATE` al rol `anon`:
+  ```sql
+  CREATE POLICY "Permitir update a usuarios anónimos" 
+  ON public.evaluaciones_completas 
+  FOR UPDATE 
+  TO anon 
+  USING (true) 
+  WITH CHECK (true);
+  ```
+
+## Fecha: 2026-06-11
+- **Acción:** Reemplazo del audio explicativo del proceso (`explicacion_proceso.ogg`) por el nuevo archivo `audio final` provisto por el usuario.
+- **Detalle técnico:** Se transcodificó el archivo MP3 a formato OGG Opus optimizado para WhatsApp (mono, canal único, bitrate de 32k) usando una utilidad local que descarga ffmpeg de manera estática y segura. Se reemplazó el archivo directamente en `resources/media/audios/explicacion_proceso.ogg` para que el backend lo sirva de forma automática en la fase correspondiente.
