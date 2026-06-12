@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Bot, Headset, ArrowRight, TrendingUp, MessageSquare } from 'lucide-react';
+import { DollarSign, Bot, Headset, ArrowRight, TrendingUp, MessageSquare, X, User, Calendar, CheckCircle2, AlertTriangle, Users } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,16 +12,25 @@ export default function DashboardView() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalMessages, setTotalMessages] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  const bars = [
-    { h: 30, label: 'Lun', val: 42 },
-    { h: 55, label: 'Mar', val: 86 },
-    { h: 100, label: 'Mié', val: 142 },
-    { h: 80, label: 'Jue', val: 112 },
-    { h: 95, label: 'Vie', val: 168 },
-    { h: 40, label: 'Sáb', val: 58 },
-    { h: 20, label: 'Dom', val: 28 },
-  ];
+  const [bars, setBars] = useState([
+    { h: 0, label: 'Lun', val: 0 },
+    { h: 0, label: 'Mar', val: 0 },
+    { h: 0, label: 'Mié', val: 0 },
+    { h: 0, label: 'Jue', val: 0 },
+    { h: 0, label: 'Vie', val: 0 },
+    { h: 0, label: 'Sáb', val: 0 },
+    { h: 0, label: 'Dom', val: 0 },
+  ]);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportData, setReportData] = useState({
+    total: 0,
+    phase1: 0,
+    phase2: 0,
+    paid: 0,
+    booked: 0,
+    human: 0,
+    stuckList: []
+  });
 
   useEffect(() => {
     fetchDashboardData();
@@ -41,33 +50,103 @@ export default function DashboardView() {
 
   const fetchDashboardData = async () => {
     try {
-      // 1. Obtener usuarios en modo HUMAN (Handovers activos)
-      const { data: humanUsers } = await supabase
+      // 1. Obtener todos los usuarios de la base de datos
+      const { data: allUsers } = await supabase
         .from('orus_users')
-        .select('*')
-        .eq('session_mode', 'HUMAN');
-        
-      if (humanUsers) {
+        .select('*');
+
+      if (allUsers) {
+        const total = allUsers.length;
+        setTotalUsers(total);
+
+        // Handovers activos (usuarios en modo HUMAN)
+        const humanUsers = allUsers.filter(u => u.session_mode === 'HUMAN');
         setHandovers(humanUsers.map(u => ({
           id: u.id,
-          name: u.push_name || u.phone_number,
+          name: u.wa_name || u.phone_number,
           issue: 'Solicitó intervención humana',
-          time: new Date(u.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          time: new Date(u.updated_at || u.last_interaction || new Date()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           urgent: true
         })));
+
+        // Calcular datos del reporte de embudo
+        const phase1 = allUsers.filter(u => u.session_mode === 'AI' && u.payment_status !== 'paid' && u.payment_status !== 'pagado' && !u.appointment_date).length;
+        const phase2 = allUsers.filter(u => u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE' || u.payment_status === 'paid' || u.payment_status === 'pagado').length;
+        const paid = allUsers.filter(u => u.payment_status === 'paid' || u.payment_status === 'pagado').length;
+        const booked = allUsers.filter(u => (u.payment_status === 'paid' || u.payment_status === 'pagado') && u.appointment_date).length;
+        const human = humanUsers.length;
+
+        // Lista de usuarios que se quedaron en el camino (sin pagar)
+        const stuckList = allUsers.filter(u => u.payment_status !== 'paid' && u.payment_status !== 'pagado').map(u => {
+          let currentStage = 'Diagnóstico Inicial';
+          if (u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE') {
+            currentStage = 'Evaluación Biométrica';
+          } else if (u.session_mode === 'HUMAN') {
+            currentStage = 'Atención Humana';
+          } else if (u.session_mode && u.session_mode.startsWith('BOOKING_')) {
+            currentStage = 'Proceso de Reserva';
+          }
+          
+          return {
+            id: u.id,
+            name: u.wa_name || u.phone_number,
+            phone: u.phone_number,
+            stage: currentStage,
+            lastActive: u.last_interaction ? new Date(u.last_interaction).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A',
+            rawLastActive: u.last_interaction ? new Date(u.last_interaction) : new Date(0)
+          };
+        }).sort((a, b) => b.rawLastActive - a.rawLastActive);
+
+        setReportData({
+          total,
+          phase1,
+          phase2,
+          paid,
+          booked,
+          human,
+          stuckList
+        });
       }
 
-      // 2. Total de usuarios
-      const { count: usersCount } = await supabase
-        .from('orus_users')
-        .select('*', { count: 'exact', head: true });
-      setTotalUsers(usersCount || 0);
-
-      // 3. Total de mensajes
+      // 2. Total de mensajes
       const { count: msgCount } = await supabase
         .from('orus_messages')
         .select('*', { count: 'exact', head: true });
       setTotalMessages(msgCount || 0);
+
+      // 3. Calcular Actividad de la Semana
+      const now = new Date();
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const { data: weekMessages } = await supabase
+        .from('orus_messages')
+        .select('created_at')
+        .gte('created_at', monday.toISOString());
+
+      const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 0: 0 };
+      if (weekMessages) {
+        weekMessages.forEach(msg => {
+          const date = new Date(msg.created_at);
+          const msgDay = date.getDay();
+          counts[msgDay] = (counts[msgDay] || 0) + 1;
+        });
+      }
+
+      const maxVal = Math.max(...Object.values(counts), 1);
+      const updatedBars = [
+        { label: 'Lun', val: counts[1], h: Math.round((counts[1] / maxVal) * 100) },
+        { label: 'Mar', val: counts[2], h: Math.round((counts[2] / maxVal) * 100) },
+        { label: 'Mié', val: counts[3], h: Math.round((counts[3] / maxVal) * 100) },
+        { label: 'Jue', val: counts[4], h: Math.round((counts[4] / maxVal) * 100) },
+        { label: 'Vie', val: counts[5], h: Math.round((counts[5] / maxVal) * 100) },
+        { label: 'Sáb', val: counts[6], h: Math.round((counts[6] / maxVal) * 100) },
+        { label: 'Dom', val: counts[0], h: Math.round((counts[0] / maxVal) * 100) },
+      ];
+      setBars(updatedBars);
 
       setLoading(false);
     } catch (error) {
@@ -75,6 +154,19 @@ export default function DashboardView() {
       setLoading(false);
     }
   };
+
+  const MetricCard = ({ icon, title, value, badge, badgeColor, accentColor, glowColor, borderAccent }) => (
+    <div className={`${glassCard} p-5`}>
+      <div className={`absolute inset-0 bg-gradient-to-br ${accentColor} opacity-50`} />
+      <div className="flex items-center gap-4 relative z-10">
+        <div className={`p-3 rounded-xl bg-slate-800 border ${borderAccent} text-slate-200`}>{icon}</div>
+        <div>
+          <p className="text-sm text-slate-400 font-medium">{title}</p>
+          <p className="text-2xl font-bold text-slate-100">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
 
   const currentDate = new Date().toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -98,31 +190,16 @@ export default function DashboardView() {
           icon={<Bot size={22} />}
           title="Total de Usuarios"
           value={loading ? "..." : totalUsers.toString()}
-          badge="Contactos"
-          badgeColor="emerald"
-          accentColor="from-emerald-500/20 to-emerald-900/10"
-          glowColor="rgba(16,185,129,0.15)"
-          borderAccent="border-emerald-500/20"
         />
         <MetricCard
           icon={<MessageSquare size={22} />}
           title="Total de Mensajes"
           value={loading ? "..." : totalMessages.toString()}
-          badge="Interacciones"
-          badgeColor="amber"
-          accentColor="from-amber-500/20 to-amber-900/10"
-          glowColor="rgba(245,158,11,0.15)"
-          borderAccent="border-amber-500/20"
         />
         <MetricCard
           icon={<Headset size={22} />}
           title="Intervenciones Humanas"
           value={loading ? "..." : `${handovers.length} Activas`}
-          badge={`${handovers.length} Pendientes`}
-          badgeColor={handovers.length > 0 ? "red" : "emerald"}
-          accentColor={handovers.length > 0 ? "from-red-500/20 to-red-900/10" : "from-emerald-500/20 to-emerald-900/10"}
-          glowColor={handovers.length > 0 ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)"}
-          borderAccent={handovers.length > 0 ? "border-red-500/20" : "border-emerald-500/20"}
         />
       </div>
 
@@ -132,8 +209,11 @@ export default function DashboardView() {
         <div className={`lg:col-span-2 ${darkCard} p-6 flex flex-col`}>
           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.02] to-transparent pointer-events-none" />
           <div className="flex justify-between items-center mb-6 relative z-10">
-            <h4 className="text-lg font-bold text-zinc-100 tracking-wide">Actividad de Usuarios Esta Semana (Demo)</h4>
-            <button className="text-emerald-400 text-sm font-semibold hover:text-emerald-300 flex items-center gap-1 transition-colors">
+            <h4 className="text-lg font-bold text-zinc-100 tracking-wide">Actividad de Usuarios Esta Semana</h4>
+            <button 
+              onClick={() => setReportModalOpen(true)}
+              className="text-emerald-400 text-sm font-semibold hover:text-emerald-300 flex items-center gap-1 transition-colors bg-white/5 px-3 py-1.5 rounded-xl border border-emerald-500/20 shadow-sm"
+            >
               Ver Informe <ArrowRight size={15} />
             </button>
           </div>
@@ -207,6 +287,180 @@ export default function DashboardView() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="relative w-full max-w-4xl bg-gradient-to-b from-slate-900 via-zinc-950 to-slate-950 border border-slate-800/80 rounded-3xl shadow-2xl p-6 md:p-8 max-h-[85vh] overflow-y-auto flex flex-col gap-6 scrollbar-thin scrollbar-thumb-zinc-700">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-start border-b border-slate-800/60 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                  <TrendingUp className="text-emerald-400" size={24} />
+                  Informe de Conversión y Flujo de Clientes
+                </h3>
+                <p className="text-slate-400 text-sm mt-1 font-medium">Análisis en tiempo real de leads, diagnóstico, pagos y agendamiento.</p>
+              </div>
+              <button 
+                onClick={() => setReportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all border border-slate-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Metrics Dashboard Inside Modal */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa Conversión (Leads a Pago)</span>
+                <span className="text-2xl font-black text-emerald-400 mt-1">
+                  {totalUsers > 0 ? ((reportData.paid / totalUsers) * 100).toFixed(1) : "0.0"}%
+                </span>
+                <span className="text-xs text-slate-400 mt-1">{reportData.paid} de {totalUsers} clientes</span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa Agendamiento (Pagos a Cita)</span>
+                <span className="text-2xl font-black text-blue-400 mt-1">
+                  {reportData.paid > 0 ? ((reportData.booked / reportData.paid) * 100).toFixed(1) : "0.0"}%
+                </span>
+                <span className="text-xs text-slate-400 mt-1">{reportData.booked} de {reportData.paid} pagados</span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa de Atención Humana</span>
+                <span className="text-2xl font-black text-amber-400 mt-1">
+                  {totalUsers > 0 ? ((reportData.human / totalUsers) * 100).toFixed(1) : "0.0"}%
+                </span>
+                <span className="text-xs text-slate-400 mt-1">{reportData.human} requeridos</span>
+              </div>
+            </div>
+
+            {/* Funnel Section */}
+            <div className="bg-slate-950/20 border border-slate-800/80 rounded-2xl p-6">
+              <h4 className="font-bold text-slate-200 text-sm mb-4 uppercase tracking-wider flex items-center gap-2">
+                <Users size={16} className="text-slate-400" />
+                Embudo de Conversión (Funnel)
+              </h4>
+              
+              <div className="space-y-4">
+                {/* Step 1: Leads */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">Paso 1: Leads Totales (Chat Iniciado)</span>
+                    <span className="text-slate-400">{totalUsers} (100%)</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-slate-700" style={{ width: '100%' }} />
+                  </div>
+                </div>
+
+                {/* Step 2: Biometrics */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">Paso 2: Diagnóstico Biométrico (Fase 2)</span>
+                    <span className="text-slate-400">
+                      {reportData.phase2} ({totalUsers > 0 ? ((reportData.phase2 / totalUsers) * 100).toFixed(0) : 0}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500" style={{ width: `${totalUsers > 0 ? (reportData.phase2 / totalUsers) * 100 : 0}%` }} />
+                  </div>
+                </div>
+
+                {/* Step 3: Paid */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">Paso 3: Pago Confirmado</span>
+                    <span className="text-slate-400">
+                      {reportData.paid} ({totalUsers > 0 ? ((reportData.paid / totalUsers) * 100).toFixed(0) : 0}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500" style={{ width: `${totalUsers > 0 ? (reportData.paid / totalUsers) * 100 : 0}%` }} />
+                  </div>
+                </div>
+
+                {/* Step 4: Appointment Booked */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">Paso 4: Cita Agendada en Calendario</span>
+                    <span className="text-slate-400">
+                      {reportData.booked} ({totalUsers > 0 ? ((reportData.booked / totalUsers) * 100).toFixed(0) : 0}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${totalUsers > 0 ? (reportData.booked / totalUsers) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stuck Users List */}
+            <div className="flex-grow flex flex-col gap-3">
+              <h4 className="font-bold text-slate-200 text-sm uppercase tracking-wider flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" />
+                Clientes que no continuaron (Abandono/Stuck)
+              </h4>
+              
+              <div className="flex-grow border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/20">
+                <div className="overflow-x-auto max-h-[300px]">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold sticky top-0 z-10">
+                        <th className="p-3 pl-4">Cliente</th>
+                        <th className="p-3">Teléfono</th>
+                        <th className="p-3">Etapa Abandonada</th>
+                        <th className="p-3">Última Actividad</th>
+                        <th className="p-3 pr-4 text-right">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40">
+                      {reportData.stuckList.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="p-8 text-center text-slate-500 font-medium">
+                            Ningún cliente estancado actualmente.
+                          </td>
+                        </tr>
+                      ) : (
+                        reportData.stuckList.map((client) => (
+                          <tr key={client.id} className="hover:bg-white/[0.02] text-slate-300 transition-colors">
+                            <td className="p-3 pl-4 font-semibold text-slate-200">{client.name}</td>
+                            <td className="p-3 font-mono text-xs text-slate-400">{client.phone}</td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                client.stage === 'Evaluación Biométrica' 
+                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                  : client.stage === 'Atención Humana'
+                                  ? 'bg-red-500/10 text-red-300 border-red-500/20'
+                                  : 'bg-zinc-500/10 text-zinc-300 border-zinc-500/20'
+                              }`}>
+                                {client.stage}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-400 text-xs">{client.lastActive}</td>
+                            <td className="p-3 pr-4 text-right">
+                              <button 
+                                onClick={() => {
+                                  setReportModalOpen(false);
+                                  navigate(`/chat?userId=${client.id}`);
+                                }}
+                                className="px-3 py-1.5 bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors font-bold rounded-lg text-xs"
+                              >
+                                Abrir Chat
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      )}
     </div>
   );
 }

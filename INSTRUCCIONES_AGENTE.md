@@ -18,7 +18,7 @@
 ## 1. CONTEXTO ACTUAL Y PLAN MAESTRO
 
 > [!IMPORTANT]
-> **Último Estado:** Infraestructura en Producción — **Spec 35 Completado** (Robustecimiento y Validación Conversacional).
+> **Último Estado:** Dashboard en tiempo real y Reporte de Conversión — **Specs 47 y 48 Completados** (Conexión de Actividad Real y Modal de Reporte de Conversión).
 > - **El flujo completo de reservas y exclusiones está operando en la VPS.**
 > - **Archivos Críticos del Sistema:**
 >   - `api/services/message_processor.py`: Contiene el switch determinista de fases con exclusión por palabras clave contextológicas y el interceptor de selección parcial de fechas.

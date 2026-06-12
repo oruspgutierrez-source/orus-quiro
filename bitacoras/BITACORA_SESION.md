@@ -611,6 +611,24 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 
 ---
 
+## 🛠️ Trabajo Realizado (Sesión 2026-06-12 — Conexión de Actividad Real y Modal de Reporte de Conversión)
+
+### Conexión de Métricas y Actividad Semanal Real
+- **Motivación**: Conectar las métricas generales de usuarios/mensajes y la gráfica de actividad semanal con datos reales e instantáneos de la base de datos (Supabase), eliminando las aproximaciones de mockup.
+- **Implementación**:
+  - Se modificó `DashboardView.jsx` para realizar consultas dinámicas agregando el recuento total de la tabla `orus_messages` y agrupando los mensajes de la semana actual por día (Lunes a Domingo).
+  - Se habilitó la suscripción multicanal de Supabase en tiempo real (`postgres_changes` para `orus_users` y `orus_messages`) para asegurar actualizaciones instantáneas del gráfico sin requerir recarga de página.
+
+### Modal de Reporte de Conversión y Flujo de Clientes (Funnel)
+- **Motivación**: Proveer al administrador de un reporte detallado al pulsar "Ver Informe" con la tasa de conversión en embudo de leads, diagnóstico biométrico, confirmación de pagos y citas agendadas, además de listar los clientes estancados (stuck) en cada etapa.
+- **Implementación**:
+  - Se creó un modal interactivo estilizado integrado en `DashboardView.jsx` que se abre al hacer clic en "Ver Informe".
+  - **Métricas Clave**: Muestra tasas dinámicas de conversión (leads a pagos), agendamiento (pagos a citas), y porcentaje de clientes con intervención humana.
+  - **Funnel visual**: Representación gráfica proporcional del embudo de 4 pasos (Leads totales -> Diagnóstico biométrico -> Pago verificado -> Cita agendada).
+  - **Clientes Estancados**: Tabla dinámica que filtra clientes sin pago confirmado, identificando en qué fase se detuvieron (Diagnóstico Inicial, Evaluación Biométrica, Atención Humana, etc.), indicando la última hora de actividad y ofreciendo un botón "Abrir Chat" que redirige al panel de conversación directa con ese cliente para atención proactiva.
+
+---
+
 ## 🚦 Estado de los Specs
 
 | # | Spec | Estado | Notas |
@@ -621,6 +639,9 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 | 44 | Actualización de Audio de Proceso | ✅ Completo | Audio convertido y reemplazado en el backend de forma transparente. |
 | 45 | Ajuste de Mensaje Final Biométrico | ✅ Completo | Corrección de texto en el webhook para referenciar la charla de mapeo. |
 | 46 | Alerta de Telegram en Carga Biométrica | ✅ Completo | Integrado envío de alerta asíncrona a Telegram en el webhook de finalización. |
+| 47 | Conexión de Actividad Real de Dashboard | ✅ Completo | Métricas y gráfico de barras conectados dinámicamente con Supabase en tiempo real. |
+| 48 | Reporte de Conversión y Flujo de Clientes | ✅ Completo | Modal con embudo visual de 4 pasos, tasas y lista de clientes estancados con links de chat. |
+
 
 
 
