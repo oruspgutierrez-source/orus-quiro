@@ -168,6 +168,7 @@ export default function DashboardView() {
     </div>
   );
 
+  const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
   const currentDate = new Date().toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
@@ -218,19 +219,21 @@ export default function DashboardView() {
             </button>
           </div>
           {/* Bar Chart */}
-          <div className="flex-1 min-h-[220px] flex items-end gap-3 relative z-10 pt-4">
+          <div className="flex-1 min-h-[220px] flex items-end gap-3 relative z-10 pt-4 h-[220px]">
             {bars.map((b, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                <div
-                  className={`w-full rounded-t-lg transition-all relative ${i === 2 ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-gradient-to-t from-zinc-700 to-zinc-600 group-hover:from-emerald-800 group-hover:to-emerald-600'}`}
-                  style={{ height: `${b.h}%` }}
-                >
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-800 text-zinc-100 text-xs px-2 py-1 rounded-md border border-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg">
-                    {b.val} activos
+              <div key={i} className="flex-1 h-full flex flex-col justify-end items-center gap-2 group">
+                <div className="w-full flex-1 flex items-end relative">
+                  <div
+                    className={`w-full rounded-t-lg transition-all relative ${i === todayIdx ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-gradient-to-t from-zinc-700 to-zinc-600 group-hover:from-emerald-800 group-hover:to-emerald-600'}`}
+                    style={{ height: `${b.h}%` }}
+                  >
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-800 text-zinc-100 text-xs px-2 py-1 rounded-md border border-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg z-20">
+                      {b.val} activos
+                    </div>
+                    <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                   </div>
-                  <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                 </div>
-                <span className="text-xs text-zinc-500 font-medium">{b.label}</span>
+                <span className="text-xs text-zinc-500 font-medium shrink-0">{b.label}</span>
               </div>
             ))}
           </div>
