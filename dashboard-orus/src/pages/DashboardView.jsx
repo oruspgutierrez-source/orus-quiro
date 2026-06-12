@@ -80,7 +80,7 @@ export default function DashboardView() {
         const stuckList = allUsers.filter(u => u.payment_status !== 'paid' && u.payment_status !== 'pagado').map(u => {
           let currentStage = 'Diagnóstico Inicial';
           if (u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE') {
-            currentStage = 'Evaluación Biométrica';
+            currentStage = 'Audio Explicativo';
           } else if (u.session_mode === 'HUMAN') {
             currentStage = 'Atención Humana';
           } else if (u.session_mode && u.session_mode.startsWith('BOOKING_')) {
@@ -303,7 +303,7 @@ export default function DashboardView() {
                   <TrendingUp className="text-emerald-400" size={24} />
                   Informe de Conversión y Flujo de Clientes
                 </h3>
-                <p className="text-slate-400 text-sm mt-1 font-medium">Análisis en tiempo real de leads, diagnóstico, pagos y agendamiento.</p>
+                <p className="text-slate-400 text-sm mt-1 font-medium">Análisis en tiempo real de leads, audio explicativo, pagos y agendamiento.</p>
               </div>
               <button 
                 onClick={() => setReportModalOpen(false)}
@@ -360,7 +360,7 @@ export default function DashboardView() {
                 {/* Step 2: Biometrics */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm font-medium">
-                    <span className="text-slate-300">Paso 2: Diagnóstico Biométrico (Fase 2)</span>
+                    <span className="text-slate-300">Paso 2: Audio Explicativo (Fase 2)</span>
                     <span className="text-slate-400">
                       {reportData.phase2} ({totalUsers > 0 ? ((reportData.phase2 / totalUsers) * 100).toFixed(0) : 0}%)
                     </span>
@@ -431,7 +431,7 @@ export default function DashboardView() {
                             <td className="p-3 font-mono text-xs text-slate-400">{client.phone}</td>
                             <td className="p-3">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                                client.stage === 'Evaluación Biométrica' 
+                                client.stage === 'Audio Explicativo' 
                                   ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
                                   : client.stage === 'Atención Humana'
                                   ? 'bg-red-500/10 text-red-300 border-red-500/20'
