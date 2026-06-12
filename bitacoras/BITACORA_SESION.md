@@ -595,6 +595,20 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
   - Se prepararon los cambios en Git y se realizó commit y push a la rama `main`.
   - Se desencadenó el redespliegue automático de la VPS haciendo curl al webhook de EasyPanel.
 
+
+---
+
+## 🛠️ Trabajo Realizado (Sesión 2026-06-12 — Alerta de Telegram al Completar Carga Biométrica)
+
+### Integración de Alertas al Canal de Telegram
+- **Motivación**: El usuario solicitó recibir una alerta en el canal de Telegram cuando un consultante finalice con éxito la carga de fotografías biométricas.
+- **Implementación**:
+  - Se modificó `api/routes/webhooks.py` en la función `biometrics_completed`.
+  - Se integró la llamada asíncrona a `send_telegram_alert` que despacha el mensaje formateado conteniendo el nombre y identificador de WhatsApp del consultante.
+  - No fue necesario realizar modificaciones en la base de datos (Supabase) debido a que la función trigger de la tabla `orus_evaluaciones` ya redirige los eventos de actualización a este endpoint.
+- **Despliegue**:
+  - Confirmación de cambios en Git local, subida a GitHub (`main`) y desencadenado del pipeline de EasyPanel.
+
 ---
 
 ## 🚦 Estado de los Specs
@@ -606,6 +620,8 @@ AI                     → ¡Tu cita ha sido registrada! 📅 + email de confirm
 | 43 | Corrección de RLS para Retorno Biométrico | ✅ Completo | RLS y trigger pg_net corregidos con firma jsonb y verificados exitosamente. |
 | 44 | Actualización de Audio de Proceso | ✅ Completo | Audio convertido y reemplazado en el backend de forma transparente. |
 | 45 | Ajuste de Mensaje Final Biométrico | ✅ Completo | Corrección de texto en el webhook para referenciar la charla de mapeo. |
+| 46 | Alerta de Telegram en Carga Biométrica | ✅ Completo | Integrado envío de alerta asíncrona a Telegram en el webhook de finalización. |
+
 
 
 

@@ -371,6 +371,16 @@ async def biometrics_completed(request: Request):
         await wa_client.send_message(to=to_jid, text=msg_text)
         print(f"[Supabase Webhook] Notificación enviada a {to_jid}", flush=True)
 
+        # Enviar alerta a Telegram
+        try:
+            from api.services.telegram_client import send_telegram_alert
+            alert_msg = f"📸 *Biometría Completada*\nEl usuario *{nombre}* ({wa_id}) ha subido sus fotografías biométricas con éxito."
+            import asyncio
+            asyncio.create_task(send_telegram_alert(alert_msg))
+            print(f"[Supabase Webhook] Alerta de Telegram encolada para {nombre}", flush=True)
+        except Exception as tel_err:
+            print(f"[Supabase Webhook] Error enviando alerta a Telegram: {tel_err}", flush=True)
+
         return {"status": "success", "message": "notification_sent", "to": to_jid}
 
     except Exception as e:

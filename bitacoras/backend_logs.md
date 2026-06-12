@@ -68,3 +68,7 @@
 - **Detalle técnico:** Se transcodificó el archivo MP3 a formato OGG Opus optimizado para WhatsApp (mono, canal único, bitrate de 32k) usando una utilidad local que descarga ffmpeg de manera estática y segura. Se reemplazó el archivo directamente en `resources/media/audios/explicacion_proceso.ogg` para que el backend lo sirva de forma automática en la fase correspondiente.
 - **Acción 2:** Corrección del texto del mensaje final enviado al usuario tras completar la carga biométrica en `api/routes/webhooks.py`.
 - **Detalle técnico:** Se cambió la frase "nuestra charla de Revelación" por "nuestra charla de mapeo" en la variable `msg_text` dentro de la ruta `biometrics_completed` (`/api/biometrics/completed`).
+
+## Fecha: 2026-06-12
+- **Acción:** Integración de alertas de Telegram al completar la carga biométrica exitosamente.
+- **Detalle técnico:** En `api/routes/webhooks.py`, dentro del endpoint `biometrics_completed`, se añadió una invocación asíncrona a `send_telegram_alert` que notifica en el canal configurado (`TELEGRAM_CHAT_ID`) cada vez que un usuario finaliza la carga biométrica con éxito. No requiere cambios en la base de datos ya que el webhook de Supabase ya apunta a este endpoint.
