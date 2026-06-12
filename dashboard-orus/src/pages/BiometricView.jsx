@@ -335,7 +335,7 @@ export default function BiometricView() {
                   <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
                     <div>
                       <span className="block text-xs text-slate-500">Edad</span>
-                      <span className="text-slate-300">{selectedEval.edad || '-'}</span>
+                      <span className="text-slate-300">{selectedEval.edad ? `${selectedEval.edad} años` : '-'}</span>
                     </div>
                     <div>
                       <span className="block text-xs text-slate-500">Ciudad</span>
@@ -346,8 +346,16 @@ export default function BiometricView() {
                       <span className="text-slate-300">{selectedEval.ocupacion || '-'}</span>
                     </div>
                     <div>
-                      <span className="block text-xs text-slate-500">Motivo de consulta</span>
-                      <span className="text-slate-300">{selectedEval.motivo_consulta || '-'}</span>
+                      <span className="block text-xs text-slate-500">Estado Civil</span>
+                      <span className="text-slate-300">{selectedEval.estado_civil || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500">Género</span>
+                      <span className="text-slate-300">{selectedEval.genero || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500">Fotos cargadas</span>
+                      <span className="text-slate-300">{selectedEval.fotos_completadas ? 'Sí' : 'No'}</span>
                     </div>
                   </div>
                 </div>

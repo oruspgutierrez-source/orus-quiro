@@ -28,6 +28,7 @@ export default function DashboardView() {
     phase2: 0,
     paid: 0,
     booked: 0,
+    biometrics: 0,
     human: 0,
     stuckList: []
   });
@@ -55,6 +56,11 @@ export default function DashboardView() {
         .from('orus_users')
         .select('*');
 
+      // 1.1 Obtener todas las evaluaciones completadas
+      const { data: allEvaluations } = await supabase
+        .from('evaluaciones_completas')
+        .select('wa_id');
+
       if (allUsers) {
         const total = allUsers.length;
         setTotalUsers(total);
@@ -69,17 +75,31 @@ export default function DashboardView() {
           urgent: true
         })));
 
+        // Normalizar números de teléfono para cruce
+        const cleanPhone = (p) => p ? p.trim().replace('@s.whatsapp.net', '') : '';
+        const completedEvalPhones = new Set(
+          (allEvaluations || []).map(ev => cleanPhone(ev.wa_id))
+        );
+
         // Calcular datos del reporte de embudo
         const phase1 = allUsers.filter(u => u.session_mode === 'AI' && u.payment_status !== 'paid' && u.payment_status !== 'pagado' && !u.appointment_date).length;
         const phase2 = allUsers.filter(u => u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE' || u.payment_status === 'paid' || u.payment_status === 'pagado').length;
         const paid = allUsers.filter(u => u.payment_status === 'paid' || u.payment_status === 'pagado').length;
         const booked = allUsers.filter(u => (u.payment_status === 'paid' || u.payment_status === 'pagado') && u.appointment_date).length;
+        const biometrics = allUsers.filter(u => completedEvalPhones.has(cleanPhone(u.phone_number))).length;
         const human = humanUsers.length;
 
-        // Lista de usuarios que se quedaron en el camino (sin pagar)
-        const stuckList = allUsers.filter(u => u.payment_status !== 'paid' && u.payment_status !== 'pagado').map(u => {
+        // Lista de usuarios que se quedaron en el camino (sin completar evaluación biométrica)
+        const stuckList = allUsers.filter(u => !completedEvalPhones.has(cleanPhone(u.phone_number))).map(u => {
+          const hasPaid = u.payment_status === 'paid' || u.payment_status === 'pagado';
+          const hasBooked = !!u.appointment_date;
+          
           let currentStage = 'Diagnóstico Inicial';
-          if (u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE') {
+          if (hasPaid && hasBooked) {
+            currentStage = 'Evaluación Biométrica';
+          } else if (hasPaid && !hasBooked) {
+            currentStage = 'Proceso de Reserva';
+          } else if (u.session_mode === 'PHASE_2_AUDIO' || u.session_mode === 'PHASE_2_IMAGE') {
             currentStage = 'Audio Explicativo';
           } else if (u.session_mode === 'HUMAN') {
             currentStage = 'Atención Humana';
@@ -103,6 +123,7 @@ export default function DashboardView() {
           phase2,
           paid,
           booked,
+          biometrics,
           human,
           stuckList
         });
@@ -138,13 +159,13 @@ export default function DashboardView() {
 
       const maxVal = Math.max(...Object.values(counts), 1);
       const updatedBars = [
-        { label: 'Lun', val: counts[1], h: Math.round((counts[1] / maxVal) * 100) },
-        { label: 'Mar', val: counts[2], h: Math.round((counts[2] / maxVal) * 100) },
-        { label: 'Mié', val: counts[3], h: Math.round((counts[3] / maxVal) * 100) },
-        { label: 'Jue', val: counts[4], h: Math.round((counts[4] / maxVal) * 100) },
-        { label: 'Vie', val: counts[5], h: Math.round((counts[5] / maxVal) * 100) },
-        { label: 'Sáb', val: counts[6], h: Math.round((counts[6] / maxVal) * 100) },
-        { label: 'Dom', val: counts[0], h: Math.round((counts[0] / maxVal) * 100) },
+        { label: 'Lun', val: counts[1], h: counts[1] > 0 ? Math.max(Math.round((counts[1] / maxVal) * 100), 5) : 0 },
+        { label: 'Mar', val: counts[2], h: counts[2] > 0 ? Math.max(Math.round((counts[2] / maxVal) * 100), 5) : 0 },
+        { label: 'Mié', val: counts[3], h: counts[3] > 0 ? Math.max(Math.round((counts[3] / maxVal) * 100), 5) : 0 },
+        { label: 'Jue', val: counts[4], h: counts[4] > 0 ? Math.max(Math.round((counts[4] / maxVal) * 100), 5) : 0 },
+        { label: 'Vie', val: counts[5], h: counts[5] > 0 ? Math.max(Math.round((counts[5] / maxVal) * 100), 5) : 0 },
+        { label: 'Sáb', val: counts[6], h: counts[6] > 0 ? Math.max(Math.round((counts[6] / maxVal) * 100), 5) : 0 },
+        { label: 'Dom', val: counts[0], h: counts[0] > 0 ? Math.max(Math.round((counts[0] / maxVal) * 100), 5) : 0 },
       ];
       setBars(updatedBars);
 
@@ -314,7 +335,7 @@ export default function DashboardView() {
             </div>
 
             {/* Metrics Dashboard Inside Modal */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa Conversión (Leads a Pago)</span>
                 <span className="text-2xl font-black text-emerald-400 mt-1">
@@ -328,6 +349,13 @@ export default function DashboardView() {
                   {reportData.paid > 0 ? ((reportData.booked / reportData.paid) * 100).toFixed(1) : "0.0"}%
                 </span>
                 <span className="text-xs text-slate-400 mt-1">{reportData.booked} de {reportData.paid} pagados</span>
+              </div>
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa Biométrica (Citas a Eval)</span>
+                <span className="text-2xl font-black text-purple-400 mt-1">
+                  {reportData.booked > 0 ? ((reportData.biometrics / reportData.booked) * 100).toFixed(1) : "0.0"}%
+                </span>
+                <span className="text-xs text-slate-400 mt-1">{reportData.biometrics} de {reportData.booked} agendados</span>
               </div>
               <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasa de Atención Humana</span>
@@ -357,10 +385,10 @@ export default function DashboardView() {
                   </div>
                 </div>
 
-                {/* Step 2: Biometrics */}
+                {/* Step 2: Audio Explicativo */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm font-medium">
-                    <span className="text-slate-300">Paso 2: Audio Explicativo (Fase 2)</span>
+                    <span className="text-slate-300">Paso 2: Audio Explicativo Enviado</span>
                     <span className="text-slate-400">
                       {reportData.phase2} ({totalUsers > 0 ? ((reportData.phase2 / totalUsers) * 100).toFixed(0) : 0}%)
                     </span>
@@ -370,7 +398,7 @@ export default function DashboardView() {
                   </div>
                 </div>
 
-                {/* Step 3: Paid */}
+                {/* Step 3: Pago Confirmado */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm font-medium">
                     <span className="text-slate-300">Paso 3: Pago Confirmado</span>
@@ -383,7 +411,7 @@ export default function DashboardView() {
                   </div>
                 </div>
 
-                {/* Step 4: Appointment Booked */}
+                {/* Step 4: Cita Agendada */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm font-medium">
                     <span className="text-slate-300">Paso 4: Cita Agendada en Calendario</span>
@@ -393,6 +421,19 @@ export default function DashboardView() {
                   </div>
                   <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500" style={{ width: `${totalUsers > 0 ? (reportData.booked / totalUsers) * 100 : 0}%` }} />
+                  </div>
+                </div>
+
+                {/* Step 5: Biometrics */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">Paso 5: Evaluación Biométrica Completada (Formulario y Fotos)</span>
+                    <span className="text-slate-400">
+                      {reportData.biometrics} ({totalUsers > 0 ? ((reportData.biometrics / totalUsers) * 100).toFixed(0) : 0}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-500" style={{ width: `${totalUsers > 0 ? (reportData.biometrics / totalUsers) * 100 : 0}%` }} />
                   </div>
                 </div>
               </div>
